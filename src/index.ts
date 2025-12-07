@@ -1,28 +1,15 @@
 import ivm from 'isolated-vm';
 import { z } from 'zod';
+import {
+  toPascalCase,
+  getParamEntries,
+  getOutputSchemaInfo,
+  generateTypeDefinition,
+  generateFunctionTypeDeclaration,
+} from './codegen';
+import type { CodeModeOptions, ToolDefinition, Tools } from './types';
 
-export interface CodeModeOptions {
-  timeout?: number;
-  sandbox?: {
-    allowConsole?: boolean;
-    maxMemory?: number;
-  };
-  onCodeGenerated?: (code: string) => void;
-  onCodeExecuted?: (result: any) => void;
-  onError?: (error: Error) => void;
-}
-
-export interface ToolDefinition {
-  description: string;
-  inputSchema: any;
-  parameters?: any;
-  outputSchema?: any;
-  execute: (...args: any[]) => Promise<any> | any;
-}
-
-export interface Tools {
-  [key: string]: ToolDefinition;
-}
+export type { CodeModeOptions, ToolDefinition, Tools };
 
 class CodeExecutionSandbox {
   private timeout: number;
@@ -219,208 +206,57 @@ function extractToolBindings(tools: Tools): Record<string, Function> {
 }
 
 function generateCodeSystemPrompt(tools: Tools): string {
-  // Convert JSON Schema (or Zod schema) to a readable type string
-  function jsonSchemaToTypeString(schema: any): string {
-    if (!schema) return 'unknown';
-    
-    // Handle Zod v4 toJSONSchema format (has 'def' and 'type' but not standard JSON Schema)
-    if (schema.def && schema.type) {
-      // Handle Zod optional wrapper - unwrap to innerType
-      if (schema.type === 'optional') {
-        const innerType = schema.def.innerType || schema.innerType;
-        return jsonSchemaToTypeString(innerType);
-      }
-      
-      // Handle Zod nullable wrapper - unwrap to innerType
-      if (schema.type === 'nullable') {
-        const innerType = schema.def.innerType || schema.innerType;
-        return jsonSchemaToTypeString(innerType);
-      }
-      
-      // Handle Zod array
-      if (schema.type === 'array' && (schema.element || schema.def.element)) {
-        const element = schema.element || schema.def.element;
-        return `${jsonSchemaToTypeString(element)}[]`;
-      }
-      
-      // Handle Zod object
-      if (schema.type === 'object' && schema.def.shape) {
-        const entries = Object.entries(schema.def.shape).map(([k, v]: [string, any]) => 
-          `${k}: ${jsonSchemaToTypeString(v)}`
-        );
-        return `{ ${entries.join(', ')} }`;
-      }
-      
-      // Handle primitive types
-      if (schema.type === 'string') return 'string';
-      if (schema.type === 'number') return 'number';
-      if (schema.type === 'boolean') return 'boolean';
-    }
-    
-    // Standard JSON Schema format
-    if (schema.type === 'object' && schema.properties) {
-      const entries = Object.entries(schema.properties).map(([k, v]: [string, any]) => 
-        `${k}: ${jsonSchemaToTypeString(v)}`
-      );
-      return `{ ${entries.join(', ')} }`;
-    }
-    
-    if (schema.type === 'array' && schema.items) {
-      return `${jsonSchemaToTypeString(schema.items)}[]`;
-    }
-    
-    if (schema.type === 'string') {
-      if (schema.enum) {
-        return schema.enum.map((v: string) => JSON.stringify(v)).join(' | ');
-      }
-      return 'string';
-    }
-    
-    if (schema.type === 'number' || schema.type === 'integer') return 'number';
-    if (schema.type === 'boolean') return 'boolean';
-    if (schema.type === 'null') return 'null';
-    
-    if (schema.anyOf) {
-      // Filter out null types for cleaner display
-      const types = schema.anyOf.filter((s: any) => s.type !== 'null');
-      if (types.length === 1) {
-        return jsonSchemaToTypeString(types[0]);
-      }
-      return schema.anyOf.map(jsonSchemaToTypeString).join(' | ');
-    }
-    
-    if (schema.oneOf) {
-      return schema.oneOf.map(jsonSchemaToTypeString).join(' | ');
-    }
-    
-    // Handle array of types (e.g., ["string", "null"])
-    if (Array.isArray(schema.type)) {
-      const types = schema.type.filter((t: string) => t !== 'null');
-      if (types.length === 1) return types[0];
-      return types.join(' | ');
-    }
-    
-    return 'unknown';
-  }
-
-  function getParamEntries(tool: ToolDefinition): { name: string; type: string; optional?: boolean }[] {
-    const schema = tool.parameters || tool.inputSchema;
-    if (!schema) return [];
-    
-    try {
-      // Convert Zod schema to JSON Schema using Zod v4's built-in method
-      let jsonSchema: any;
-      if (typeof schema === 'object' && 'type' in schema && typeof schema.type === 'string') {
-        // Already a JSON schema
-        jsonSchema = schema;
-      } else {
-        // Convert Zod to JSON Schema using built-in toJSONSchema (Zod v4+)
-        jsonSchema = (z as any).toJSONSchema(schema);
-      }
-      
-      // Extract parameters from Zod v4 toJSONSchema format (has 'def.shape')
-      if (jsonSchema.type === 'object' && jsonSchema.def && jsonSchema.def.shape) {
-        const shape = jsonSchema.def.shape;
-        const required: string[] = Array.isArray(jsonSchema.def.required) ? jsonSchema.def.required : [];
-        return Object.entries(shape).map(([key, prop]: [string, any]) => {
-          const type = jsonSchemaToTypeString(prop);
-          const optional = !required.includes(key);
-          return { name: key, type, optional };
-        });
-      }
-      
-      // Extract parameters from standard JSON Schema format (has 'properties')
-      if (jsonSchema.type === 'object' && jsonSchema.properties) {
-        const required: string[] = Array.isArray(jsonSchema.required) ? jsonSchema.required : [];
-        return Object.entries(jsonSchema.properties).map(([key, prop]: [string, any]) => {
-          const type = jsonSchemaToTypeString(prop);
-          const optional = !required.includes(key);
-          return { name: key, type, optional };
-        });
-      }
-      
-      return [];
-    } catch (err) {
-      console.error('[getParamEntries] Error processing schema:', err);
-      return [];
-    }
-  }
-
-  function getReturnSignature(tool: ToolDefinition): string {
-    const schema = tool.outputSchema;
-    if (!schema) return '';
-    
-    try {
-      const formatType = (s: string) => {
-        let out = s;
-        const tokens = ['string', 'number', 'boolean', 'null', 'undefined'];
-        for (const t of tokens) {
-          const re = new RegExp(`\\b${t}\\b`, 'g');
-          out = out.replace(re, `<${t}>`);
-        }
-        return out;
-      };
-      
-      // Convert Zod schema to JSON Schema using Zod v4's built-in method
-      let jsonSchema: any;
-      if (typeof schema === 'object' && 'type' in schema && typeof schema.type === 'string') {
-        // Already a JSON schema
-        jsonSchema = schema;
-      } else {
-        // Convert Zod to JSON Schema using built-in toJSONSchema (Zod v4+)
-        jsonSchema = (z as any).toJSONSchema(schema);
-      }
-      
-      const typeStr = jsonSchemaToTypeString(jsonSchema);
-      return typeStr ? `: ${formatType(typeStr)}` : '';
-    } catch {
-      return '';
-    }
-  }
-
   const toolDescriptions = Object.entries(tools)
     .map(([name, tool]) => {
       // Use sanitized name in documentation to match what's available in the sandbox
       const sanitizedName = sanitizeToolName(name);
+      const pascalName = toPascalCase(sanitizedName);
       const params = getParamEntries(tool);
-      const returns = getReturnSignature(tool);
+      const outputInfo = getOutputSchemaInfo(tool);
+
       const lines: string[] = [];
-      lines.push(`\n## ${sanitizedName}( params )`);
-      lines.push(`  - ${tool.description}`);
-      if (params.length > 0) {
-        lines.push(`  - params <object>:`);
-        for (const p of params) {
-          const t = (p.type || '').trim();
-          const typeDisplay = t.startsWith('{') ? t : `<${t}>`;
-          lines.push(`    - ${p.name} ${typeDisplay}${p.optional ? ' (optional)' : ''}`);
+
+      // Generate type definition if output is an object with properties
+      const resultTypeName = `${pascalName}Result`;
+      let returnType = 'void';
+
+      if (outputInfo) {
+        if (outputInfo.isObject && outputInfo.properties && outputInfo.properties.length > 0) {
+          lines.push(generateTypeDefinition(resultTypeName, outputInfo.properties));
+          lines.push('');
+          returnType = resultTypeName;
+        } else {
+          returnType = outputInfo.type;
         }
       }
-      if (returns) {
-        lines.push(`  - returns${returns}`);
-      }
+
+      // Generate function type declaration with inline comments
+      lines.push(generateFunctionTypeDeclaration(sanitizedName, tool.description, params, returnType));
+
       return lines.join('\n');
     })
-    .join('\n');
+    .join('\n\n');
 
   const prompt = `
 
 <Tool Calling SDK>
-You can take action by writing server-side JavaScript using the following SDK. 
+You can take action by writing server-side JavaScript using the following SDK.
 
 ## Runtime Environment
 
 - NodeJS V8 isolate secure sandboxed environment
-- \`document\` and \`window\` are undefined. 
+- \`document\` and \`window\` are undefined.
 - This is not a browser environment, so DOM APIs are NOT available
 - The context is async, so you can use \`await\` directly
 
 ## Available Functions
 
-- The following functions are **directly available in scope** - no imports or destructuring needed:
-- These functions have bindings to the chrome extension environment
+The following functions are **directly available in scope** - no imports or destructuring needed.
+These functions have bindings to the runtime environment.
 
-# SDK
+\`\`\`typescript
 ${toolDescriptions}
+\`\`\`
 
 ## Usage Notes
 
