@@ -260,32 +260,33 @@ export function generateFunctionTypeDeclaration(
 ): string {
   const lines: string[] = [];
 
-  // Add description comment
-  lines.push(`// ${description}`);
+  // Add description comment (handle multiline descriptions)
+  const descriptionLines = description.split('\n');
+  for (const line of descriptionLines) {
+    lines.push(`// ${line}`);
+  }
 
   // Generate function type with inline parameter comments
   if (params.length === 0) {
     lines.push(`${functionName}: () => Promise<${returnType}>;`);
-  } else if (params.length === 1 && !params[0].description) {
-    // Single param without description - inline format
-    const param = params[0];
-    const optionalMark = param.optional ? '?' : '';
-    lines.push(`${functionName}: (${param.name}${optionalMark}: ${param.type}) => Promise<${returnType}>;`);
   } else {
-    // Multiple params or params with descriptions - multiline format
-    lines.push(`${functionName}: (`);
+    // Tools use object-based parameters, so wrap params in an object
+    lines.push(`${functionName}: ({`);
     for (let i = 0; i < params.length; i++) {
       const param = params[i];
       const optionalMark = param.optional ? '?' : '';
-      const comment = param.description ? `  // ${param.description}` : '';
       const comma = i < params.length - 1 ? ',' : '';
 
-      if (comment) {
-        lines.push(comment);
+      // Handle multiline parameter descriptions
+      if (param.description) {
+        const paramDescLines = param.description.split('\n');
+        for (const line of paramDescLines) {
+          lines.push(`  // ${line}`);
+        }
       }
       lines.push(`  ${param.name}${optionalMark}: ${param.type}${comma}`);
     }
-    lines.push(`) => Promise<${returnType}>;`);
+    lines.push(`}) => Promise<${returnType}>;`);
   }
 
   return lines.join('\n');

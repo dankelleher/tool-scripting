@@ -1,6 +1,6 @@
 {
   "name": "@civic/tool-scripting",
-  "version": "0.3.2",
+  "version": "0.3.7",
   "description": "Code mode tool call scripting for Vercel AI SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
