@@ -1,7 +1,7 @@
 const { toolScripting } = require('../dist/index.js');
 const { streamText, generateText, tool } = require('ai');
+const { MockLanguageModelV3, simulateReadableStream } = require('ai/test');
 const { z } = require('zod');
-const { createMockModel } = require('./mockModel');
 
 // Tools defined like in README using ai.tool() and zod
 const tools = {
@@ -33,10 +33,41 @@ async function test() {
   console.log('🧪 Testing tool-script...\n');
 
   try {
-    const model = createMockModel([
-      { toolScript: `const location = await getUserLocation();\nconst weather = await getWeather({ location });\nreturn { location, weather };` },
-      { text: 'Done.' },
-    ]);
+    let callCount = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        callCount++;
+        if (callCount === 1) {
+          // First call: return tool script
+          return {
+            finishReason: 'stop',
+            usage: { inputTokens: 10, outputTokens: 20 },
+            content: [
+              {
+                type: 'tool-call',
+                toolCallType: 'function',
+                toolCallId: 'call_1',
+                toolName: 'runToolScript',
+                args: {
+                  script: `const location = await getUserLocation();\nconst weather = await getWeather({ location });\nreturn { location, weather };`,
+                  description: 'Get weather for user location'
+                }
+              }
+            ],
+            warnings: [],
+          };
+        } else {
+          // Second call: return final text
+          return {
+            finishReason: 'stop',
+            usage: { inputTokens: 10, outputTokens: 20 },
+            content: [{ type: 'text', text: 'Done.' }],
+            warnings: [],
+          };
+        }
+      },
+    });
+
     const result = await toolScripting(generateText)({
       model,
       tools,

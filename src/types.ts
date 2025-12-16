@@ -12,11 +12,10 @@ export interface CodeModeOptions {
 }
 
 export interface ToolDefinition {
-  description: string;
+  description?: string;
   inputSchema: any;
-  parameters?: any;
   outputSchema?: any;
-  execute: (...args: any[]) => Promise<any> | any;
+  execute?: (...args: any[]) => Promise<any> | any;
 }
 
 export interface Tools {

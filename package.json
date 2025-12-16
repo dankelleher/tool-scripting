@@ -1,6 +1,6 @@
 {
   "name": "@civic/tool-scripting",
-  "version": "0.3.7",
+  "version": "0.3.10",
   "description": "Code mode tool call scripting for Vercel AI SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,12 +26,13 @@
     "isolated-vm": "^5.0.1"
   },
   "peerDependencies": {
-    "ai": "^5.0.56",
+    "ai": "^6.0.0-beta.156",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@ai-sdk/openai": "^2.0.38",
     "@types/node": "^18.0.0",
+    "ai": "^6.0.0-beta.156",
     "dotenv": "^17.2.2",
     "typescript": "^5.0.0",
     "zod": "^4.1.11"

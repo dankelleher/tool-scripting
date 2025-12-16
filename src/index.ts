@@ -216,6 +216,11 @@ function extractToolBindings(tools: Tools): Record<string, Function> {
   for (const [name, tool] of Object.entries(tools)) {
     // Sanitize tool name to ensure it's a valid JavaScript identifier
     const sanitizedName = sanitizeToolName(name);
+
+    if (!tool.execute) {
+      throw new Error(`Tool "${name}" must have an execute function for code mode`);
+    }
+
     bindings[sanitizedName] = tool.execute;
   }
 
@@ -248,7 +253,7 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
       }
 
       // Generate function type declaration with inline comments
-      lines.push(generateFunctionTypeDeclaration(sanitizedName, tool.description, params, returnType));
+      lines.push(generateFunctionTypeDeclaration(sanitizedName, tool.description || '', params, returnType));
 
       return lines.join('\n');
     })

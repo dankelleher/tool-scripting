@@ -150,7 +150,7 @@ export interface OutputSchemaInfo {
  * Get parameter entries with descriptions from a tool definition
  */
 export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
-  const schema = tool.parameters || tool.inputSchema;
+  const schema = tool.inputSchema;
   if (!schema) return [];
 
   try {
