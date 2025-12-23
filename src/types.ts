@@ -5,17 +5,24 @@ export interface CodeModeOptions {
     maxMemory?: number;
   };
   logEnhancedSystemPrompt?: boolean;
+  exclusiveContent?: boolean;
   customToolSdkPrompt?: (toolDescriptions: string) => string;
   onCodeGenerated?: (code: string) => void;
   onCodeExecuted?: (result: any) => void;
   onError?: (error: Error) => void;
 }
 
+type ToolResult = {
+    isError: boolean;
+    content?: any[];
+    structuredContent?: Record<string, any>;
+}
+
 export interface ToolDefinition {
   description?: string;
   inputSchema: any;
   outputSchema?: any;
-  execute?: (...args: any[]) => Promise<any> | any;
+  execute?: (...args: any[]) => Promise<ToolResult> | ToolResult;
 }
 
 export interface Tools {

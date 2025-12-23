@@ -33,10 +33,10 @@ class CodeExecutionSandbox {
     return new Promise(async (resolve, reject) => {
       const isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
       let finished = false;
-      
+
       // Execution log to capture function calls
       const executionLog: Array<{ fn: string; args: any; result: any }> = [];
-      
+
       const cleanup = () => {
         try { isolate.dispose(); } catch {}
       };
@@ -120,25 +120,25 @@ class CodeExecutionSandbox {
               }
             })();`,
           [
-            new ivm.Reference((res: any) => { 
-              if (!finished) { 
-                finished = true; 
-                clearTimeout(wallTimer); 
+            new ivm.Reference((res: any) => {
+              if (!finished) {
+                finished = true;
+                clearTimeout(wallTimer);
                 cleanup();
                 // Format execution log and final result
                 const formattedResult = this.formatExecutionResult(executionLog, res, undefined, includeExecutionTrace);
-                resolve(formattedResult); 
-              } 
+                resolve(formattedResult);
+              }
             }),
-            new ivm.Reference((msg: string) => { 
-              if (!finished) { 
-                finished = true; 
-                clearTimeout(wallTimer); 
+            new ivm.Reference((msg: string) => {
+              if (!finished) {
+                finished = true;
+                clearTimeout(wallTimer);
                 cleanup();
                 // Include execution log even on error
                 const formattedError = this.formatExecutionResult(executionLog, null, msg, includeExecutionTrace);
-                reject(new Error(formattedError)); 
-              } 
+                reject(new Error(formattedError));
+              }
             }),
           ],
           { timeout: this.timeout },
@@ -210,7 +210,9 @@ function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_$]/g, '_');
 }
 
-function extractToolBindings(tools: Tools): Record<string, Function> {
+function extractToolBindings(tools: Tools, options: {
+    exclusiveContent: boolean;
+}): Record<string, Function> {
   const bindings: Record<string, Function> = {};
 
   for (const [name, tool] of Object.entries(tools)) {
@@ -221,7 +223,24 @@ function extractToolBindings(tools: Tools): Record<string, Function> {
       throw new Error(`Tool "${name}" must have an execute function for code mode`);
     }
 
-    bindings[sanitizedName] = tool.execute;
+    const wrappedExecute = async (...args: any[]) => {
+        // If no arguments provided, pass empty object {} to match AI SDK tool expectations
+        // This handles the case where LLM calls getData() but tool expects getData({})
+        const executeArgs = args.length === 0 ? [{}] : args;
+        const result = await tool.execute!(...executeArgs);
+        if (!options.exclusiveContent) return result
+        // Ensure only one of content or structuredContent is returned to reduce token usage
+        // prefer structuredContent if available
+        // Warning, this assumes that structuredContent and content include the same information, which may not always be the case
+        const content = result.structuredContent ? undefined : result.content;
+        return {
+            isError: result.isError,
+            content: content,
+            structuredContent: result.structuredContent,
+        }
+    }
+
+    bindings[sanitizedName] = wrappedExecute;
   }
 
   return bindings;
@@ -312,7 +331,9 @@ export function toolScripting(aiFunction: Function, options: CodeModeOptions = {
     const toolsObj: Tools = tools || {} as Tools;
 
     // Extract tool bindings
-    const bindings = extractToolBindings(toolsObj);
+    const bindings = extractToolBindings(toolsObj, {
+        exclusiveContent: options.exclusiveContent ?? false,
+    });
 
     // Create execution sandbox
     const sandbox = new CodeExecutionSandbox(options);
