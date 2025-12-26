@@ -154,7 +154,8 @@ export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
   if (!schema) return [];
 
   try {
-    const jsonSchema = toJsonSchema(schema);
+    // support both Zod schemas and JSON Schema
+    const jsonSchema = Object.hasOwnProperty.bind(schema, "jsonSchema") ? schema.jsonSchema : toJsonSchema(schema);
     if (!jsonSchema) return [];
 
     // Extract parameters from Zod v4 toJSONSchema format (has 'def.shape')

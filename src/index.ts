@@ -7,9 +7,12 @@ import {
   generateTypeDefinition,
   generateFunctionTypeDeclaration,
 } from './codegen';
+import { isMCPToolResult, adaptMCPToolResult } from './mcp-adapter';
 import type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig } from './types';
+import type { MCPToolResult } from './mcp-adapter';
 
-export type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig };
+export type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig, MCPToolResult };
+export { isMCPToolResult, adaptMCPToolResult };
 
 class CodeExecutionSandbox {
   private timeout: number;
@@ -210,9 +213,7 @@ function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_$]/g, '_');
 }
 
-function extractToolBindings(tools: Tools, options: {
-    exclusiveContent: boolean;
-}): Record<string, Function> {
+function extractToolBindings(tools: Tools): Record<string, Function> {
   const bindings: Record<string, Function> = {};
 
   for (const [name, tool] of Object.entries(tools)) {
@@ -227,17 +228,14 @@ function extractToolBindings(tools: Tools, options: {
         // If no arguments provided, pass empty object {} to match AI SDK tool expectations
         // This handles the case where LLM calls getData() but tool expects getData({})
         const executeArgs = args.length === 0 ? [{}] : args;
-        const result = await tool.execute!(...executeArgs);
-        if (!options.exclusiveContent) return result
-        // Ensure only one of content or structuredContent is returned to reduce token usage
-        // prefer structuredContent if available
-        // Warning, this assumes that structuredContent and content include the same information, which may not always be the case
-        const content = result.structuredContent ? undefined : result.content;
-        return {
-            isError: result.isError,
-            content: content,
-            structuredContent: result.structuredContent,
+        const result: any = await tool.execute!(...executeArgs);
+
+        // Apply MCP adapter if result matches MCP tool result format
+        if (isMCPToolResult(result)) {
+            return adaptMCPToolResult(result, tool.outputSchema);
         }
+
+        return result;
     }
 
     bindings[sanitizedName] = wrappedExecute;
@@ -310,6 +308,8 @@ ${toolDescriptions}
 - **Already async**: Your script runs in an async context. Use \`await\` directly. Do NOT wrap in \`(async () => { ... })()\`.
 - **Return values**: Use \`return\` to return data from your script.
 - **Don't use try/catch**: We want original errors to be thrown. Use \`.catch()\` to handle errors only if errors are expected and you want to handle them gracefully.
+- **Don't use defensive fallbacks**: Avoid patterns like \`|| []\`, \`|| {}\`, or \`?? defaultValue\` that mask type errors. If a property doesn't exist, let the error surface so it can be debugged. Trust that function results match their documented return types. If the return type is unknown, don't assume it.
+- **Return parsimonious data**: Return only the data you need. Avoid returning large objects or extraneous data that increases token usage. However, pay attention to the previous point about not assuming return types.
 
 # Example
 
@@ -331,9 +331,7 @@ export function toolScripting(aiFunction: Function, options: CodeModeOptions = {
     const toolsObj: Tools = tools || {} as Tools;
 
     // Extract tool bindings
-    const bindings = extractToolBindings(toolsObj, {
-        exclusiveContent: options.exclusiveContent ?? false,
-    });
+    const bindings = extractToolBindings(toolsObj);
 
     // Create execution sandbox
     const sandbox = new CodeExecutionSandbox(options);
