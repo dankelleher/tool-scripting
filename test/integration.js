@@ -2,12 +2,12 @@ require('dotenv').config();
 
 const { toolScripting } = require('../dist/index.js');
 const { generateText, tool, stepCountIs } = require('ai');
-const { openai } = require('@ai-sdk/openai');
 const { z } = require('zod');
+const {anthropic} = require("@ai-sdk/anthropic");
 
 async function main() {
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('Missing OPENAI_API_KEY in environment. Skipping integration test.');
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('Missing ANTHROPIC_API_KEY in environment. Skipping integration test.');
     process.exit(1);
   }
 
@@ -38,8 +38,11 @@ async function main() {
 
   console.log('🔌 Running integration test...');
 
-  const result = await toolScripting(generateText)({
-    model: openai('gpt-5', { apiKey: process.env.OPENAI_API_KEY }),
+    const codeModeOptions = {
+        logEnhancedSystemPrompt: true
+    };
+    const result = await toolScripting(generateText, codeModeOptions)({
+    model: anthropic('claude-sonnet-4-5-20250929'),
     tools,
     system: 'You are a helpful assistant.',
     messages: [
