@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { toolScripting } = require('../dist/index.js');
+const { toolScripting } = require('../../dist/index.js');
 const { generateText, tool, stepCountIs } = require('ai');
 const { z } = require('zod');
 const {anthropic} = require("@ai-sdk/anthropic");

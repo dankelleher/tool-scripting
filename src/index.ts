@@ -7,12 +7,12 @@ import {
   generateTypeDefinition,
   generateFunctionTypeDeclaration,
 } from './codegen';
-import { isMCPToolResult, adaptMCPToolResult } from './mcp-adapter';
+import { isMCPToolResult, adaptMCPToolResult, MCPToolError } from './mcp-adapter';
 import type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig } from './types';
 import type { MCPToolResult } from './mcp-adapter';
 
 export type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig, MCPToolResult };
-export { isMCPToolResult, adaptMCPToolResult };
+export { isMCPToolResult, adaptMCPToolResult, MCPToolError };
 
 class CodeExecutionSandbox {
   private timeout: number;

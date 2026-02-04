@@ -16,6 +16,24 @@ export interface MCPToolResult {
 }
 
 /**
+ * Error class for MCP tool errors
+ * Contains the original MCP result data for inspection
+ */
+export class MCPToolError extends Error {
+    readonly content?: MCPToolResult['content'];
+    readonly structuredContent?: MCPToolResult['structuredContent'];
+
+    constructor(result: MCPToolResult) {
+        // Extract error message from content if available
+        const message = result.content?.[0]?.text ?? 'MCP tool execution failed';
+        super(message);
+        this.name = 'MCPToolError';
+        this.content = result.content;
+        this.structuredContent = result.structuredContent;
+    }
+}
+
+/**
  * Check if a result matches the MCP tool result format
  */
 export function isMCPToolResult(result: any): result is MCPToolResult {
@@ -34,17 +52,18 @@ export function isMCPToolResult(result: any): result is MCPToolResult {
  * @param mcpResult - The raw result from MCP tool execution
  * @param outputSchema - The tool's output schema (if any)
  * @returns Adapted result based on the following rules:
- *   - If isError is true, returns unchanged
+ *   - If isError is true, throws MCPToolError (allows LLM to self-correct)
  *   - If structuredContent exists, returns it
  *   - If no content, returns undefined
  *   - If multiple content entries, returns all
  *   - If single text content entry, tries to parse as JSON (regardless of output schema)
  *   - Otherwise returns the content entry itself
+ * @throws {MCPToolError} When isError is true
  */
 export function adaptMCPToolResult(result: MCPToolResult, outputSchema?: any): any {
-    // If isError is true, return unchanged
+    // If isError is true, throw an MCPToolError so the LLM can self-correct
     if (result.isError) {
-        return result;
+        throw new MCPToolError(result);
     }
 
     // If structuredContent exists, return it

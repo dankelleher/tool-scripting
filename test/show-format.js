@@ -1,7 +1,7 @@
 const {
   generateTypeDefinition,
   generateFunctionTypeDeclaration
-} = require('../dist/codegen.js');
+} = require('../dist/codegen');
 
 console.log('=== Example 1: getUserLocation (no params) ===\n');
 console.log(generateFunctionTypeDeclaration(

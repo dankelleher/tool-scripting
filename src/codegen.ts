@@ -115,18 +115,31 @@ export function getSchemaDescription(schema: any): string | undefined {
 }
 
 /**
+ * Check if a schema is a Zod schema (v4+)
+ */
+function isZodSchema(schema: any): boolean {
+  return schema?.['~standard']?.vendor === 'zod';
+}
+
+/**
  * Convert a Zod or JSON schema to a properly formatted JSON schema
  */
 export function toJsonSchema(schema: any): any {
   if (!schema) return null;
 
   try {
-    // Already a JSON schema
+    // Convert Zod to JSON Schema using built-in toJSONSchema (Zod v4+)
+    // Must check this BEFORE the JSON Schema check since Zod schemas also have a 'type' property
+    if (isZodSchema(schema)) {
+      return (z as any).toJSONSchema(schema);
+    }
+
+    // Already a JSON schema (has 'type' but not a Zod schema)
     if (typeof schema === 'object' && 'type' in schema && typeof schema.type === 'string') {
       return schema;
     }
-    // Convert Zod to JSON Schema using built-in toJSONSchema (Zod v4+)
-    return (z as any).toJSONSchema(schema);
+
+    return null;
   } catch {
     return null;
   }
@@ -155,7 +168,7 @@ export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
 
   try {
     // support both Zod schemas and JSON Schema
-    const jsonSchema = Object.hasOwnProperty.bind(schema, "jsonSchema") ? schema.jsonSchema : toJsonSchema(schema);
+    const jsonSchema = 'jsonSchema' in schema ? schema.jsonSchema : toJsonSchema(schema);
     if (!jsonSchema) return [];
 
     // Extract parameters from Zod v4 toJSONSchema format (has 'def.shape')
