@@ -1,4 +1,4 @@
-const { toolScripting } = require('../dist/index.js');
+const { toolScripting } = require('../../dist/index.js');
 const { streamText, generateText, tool } = require('ai');
 const { MockLanguageModelV3, simulateReadableStream } = require('ai/test');
 const { z } = require('zod');

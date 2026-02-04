@@ -10,8 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node test/basic.js",
-    "test:int": "node test/integration.js"
+    "test": "node test/unit/basic.js && npx tsx --test test/unit/*.test.ts",
+    "test:int": "node test/integration/integration.js"
   },
   "keywords": [
     "ai",
@@ -23,7 +23,7 @@
   "author": "will123195",
   "license": "MIT",
   "dependencies": {
-    "isolated-vm": "^5.0.1"
+    "isolated-vm": "^6.0.2"
   },
   "peerDependencies": {
     "ai": ">=6.0.0",

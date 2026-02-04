@@ -10,8 +10,8 @@ import {
   getOutputSchemaInfo,
   generateTypeDefinition,
   generateFunctionTypeDeclaration,
-} from '../src/codegen';
-import type { ToolDefinition } from '../src/types';
+} from '../../src/codegen';
+import type { ToolDefinition } from '../../src/types';
 
 describe('toPascalCase', () => {
   test('converts simple snake_case to PascalCase', () => {
@@ -255,13 +255,13 @@ describe('getParamEntries', () => {
     assert.ok(nameParam);
     assert.strictEqual(nameParam.type, 'string');
     assert.strictEqual(nameParam.description, 'User name');
-    // Note: Zod v4 toJSONSchema marks fields as optional by default
-    assert.strictEqual(nameParam.optional, true);
+    assert.strictEqual(nameParam.optional, false);
 
     const ageParam = params.find((p) => p.name === 'age');
     assert.ok(ageParam);
     assert.strictEqual(ageParam.type, 'number');
     assert.strictEqual(ageParam.description, 'User age');
+    assert.strictEqual(ageParam.optional, false);
   });
 
   test('handles optional parameters', () => {
@@ -278,8 +278,7 @@ describe('getParamEntries', () => {
     const requiredParam = params.find((p) => p.name === 'required');
     const optionalParam = params.find((p) => p.name === 'optional');
 
-    // Note: Zod v4 toJSONSchema marks all fields as optional currently
-    assert.strictEqual(requiredParam?.optional, true);
+    assert.strictEqual(requiredParam?.optional, false);
     assert.strictEqual(optionalParam?.optional, true);
   });
 
@@ -562,11 +561,10 @@ describe('Integration: full tool definition conversion', () => {
       params,
       'GetWeatherResult'
     );
-    // Note: Zod v4 toJSONSchema currently marks parameters as optional
     const expectedFuncDecl = `// Get weather for a location
 getWeather: ({
   // Location to get weather for
-  location?: string
+  location: string
 }) => Promise<GetWeatherResult>;`;
     assert.strictEqual(funcDecl, expectedFuncDecl);
   });
