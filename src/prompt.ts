@@ -25,18 +25,55 @@ ${toolDescriptions}
 
 ## Code Mode Rules
 
+(Warning: The examples ahead should not be treated as indicative of any real tool input or output, they are just illustrating the points.
+
 ### Output Structure Discovery
 - **Never assume a tool's output structure.** If the output schema is unknown, make a single minimal test call (smallest possible input, 1–3 rows) to infer the structure.
 - Once inferred, reuse that structure consistently. Do not guess or re-test.
 - If the output structure is already known from the type definitions above, do not make a test call.
+
+Example:
+\`\`\`typescript
+// When output schema is unknown, make a minimal test call first
+const sample = await queryDatabase({ limit: 1 });
+// Now you know the structure: { rows: [{ id, name, email }] }
+
+// Use that structure for the real query
+const results = await queryDatabase({ filter: condition, limit: 100 });
+const names = results.rows.map(r => r.name);
+\`\`\`
 
 ### Tool Chaining
 - **Code mode exists to chain tools together.** Tool outputs should flow directly into subsequent tool calls.
 - Do not split related tool calls into separate scripts or disconnected steps.
 - Prefer explicit chaining: pass outputs directly as inputs to the next tool.
 
+Example:
+\`\`\`typescript
+// Bad: returns intermediate data, requiring another script
+const userId = await getCurrentUser();
+return userId; // Don't do this - chain instead
+
+// Good: chain tools in a single script
+const userId = await getCurrentUser();
+const orders = await getOrders({ userId });
+const total = orders.reduce((sum, o) => sum + o.amount, 0);
+return { userId, orderCount: orders.length, total };
+\`\`\`
+
 ### Data Efficiency
 - **Retrieve only the smallest necessary information** from any tool output.
+
+Example
+\`\`\`typescript
+// Bad: retrieves entire user object when only email is needed
+const user = await getUser({ id: userId });
+const email = user.email;
+
+// Good: retrieves only the email directly
+const { email } = await getUser({ id: userId });
+\`\`\`
+
 - Be strict about test calls: they are allowed only to discover output structure, never to run large or expensive queries.
 - Large queries should only be executed when their output is immediately consumed by another tool.
 
