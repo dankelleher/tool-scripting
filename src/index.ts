@@ -7,6 +7,7 @@ import {
   generateTypeDefinition,
   generateFunctionTypeDeclaration,
 } from './codegen';
+import { DEFAULT_CODE_MODE_PROMPT } from './prompt';
 import { isMCPToolResult, adaptMCPToolResult, MCPToolError } from './mcp-adapter';
 import type {
   CodeModeOptions,
@@ -31,7 +32,7 @@ export type {
   ToolResultValue,
   OnToolResultCallback,
 };
-export { isMCPToolResult, adaptMCPToolResult, MCPToolError };
+export { isMCPToolResult, adaptMCPToolResult, MCPToolError, DEFAULT_CODE_MODE_PROMPT };
 
 /**
  * Sentinel prefix used to signal script abort across the isolate boundary.
@@ -368,48 +369,7 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
     return customPrompt(toolDescriptions);
   }
 
-  const prompt = `
-
-<Tool Calling SDK>
-You can take action by writing server-side JavaScript using the following SDK.
-
-## Runtime Environment
-
-- NodeJS V8 isolate secure sandboxed environment
-- \`document\` and \`window\` are undefined.
-- This is not a browser environment, so DOM APIs are NOT available
-- The context is async, so you can use \`await\` directly
-
-## Available Functions
-
-The following functions are **directly available in scope** - no imports or destructuring needed.
-These functions have bindings to the runtime environment.
-
-\`\`\`typescript
-${toolDescriptions}
-\`\`\`
-
-## Usage Notes
-
-- **Functions are in scope**: Call them directly (e.g. \`await click(...)\`). Do NOT destructure from \`globalThis\` or \`global\`.
-- **Already async**: Your script runs in an async context. Use \`await\` directly. Do NOT wrap in \`(async () => { ... })()\`.
-- **Return values**: Use \`return\` to return data from your script.
-- **Don't use try/catch**: We want original errors to be thrown. Use \`.catch()\` to handle errors only if errors are expected and you want to handle them gracefully.
-- **Don't use defensive fallbacks**: Avoid patterns like \`|| []\`, \`|| {}\`, or \`?? defaultValue\` that mask type errors. If a property doesn't exist, let the error surface so it can be debugged. Trust that function results match their documented return types. If the return type is unknown, don't assume it.
-- **Return parsimonious data**: Return only the data you need. Avoid returning large objects or extraneous data that increases token usage. However, pay attention to the previous point about not assuming return types.
-
-# Example
-
-\`\`\`yaml
-toolName: runToolScript
-args:
-  description: Getting user location and fetching weather...
-  script: const location = await getUserLocation();\\nconst weather = await getWeather({ location });\\nreturn { location, weather };
-\`\`\`
-</Tool Calling SDK>
-`;
-
-  return prompt;
+  return DEFAULT_CODE_MODE_PROMPT(toolDescriptions);
 }
 
 export function toolScripting(aiFunction: Function, options: CodeModeOptions = {}) {
