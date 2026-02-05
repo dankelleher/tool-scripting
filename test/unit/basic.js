@@ -48,10 +48,10 @@ async function test() {
                 toolCallType: 'function',
                 toolCallId: 'call_1',
                 toolName: 'runToolScript',
-                args: {
+                input: JSON.stringify({
                   script: `const location = await getUserLocation();\nconst weather = await getWeather({ location });\nreturn { location, weather };`,
                   description: 'Get weather for user location'
-                }
+                })
               }
             ],
             warnings: [],

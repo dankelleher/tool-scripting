@@ -48,7 +48,7 @@ async function main() {
     messages: [
       { role: 'user', content: 'What is the weather like today?' },
     ],
-    stopWhen: stepCountIs(5)
+    stopWhen: stepCountIs(5),
   });
 
   console.log('Response:', JSON.stringify(result.response, null, 2));
