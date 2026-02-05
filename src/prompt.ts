@@ -25,7 +25,7 @@ ${toolDescriptions}
 
 ## Code Mode Rules
 
-(Warning: The examples ahead should not be treated as indicative of any real tool input or output, they are just illustrating the points.
+(Warning: The examples ahead should not be treated as indicative of any real tool input or output, they are just illustrating the points.)
 
 ### Output Structure Discovery
 - **Never assume a tool's output structure.** If the output schema is unknown, make a single minimal test call (smallest possible input, 1–3 rows) to infer the structure.
