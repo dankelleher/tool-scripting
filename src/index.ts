@@ -8,11 +8,60 @@ import {
   generateFunctionTypeDeclaration,
 } from './codegen';
 import { isMCPToolResult, adaptMCPToolResult, MCPToolError } from './mcp-adapter';
-import type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig } from './types';
+import type {
+  CodeModeOptions,
+  ToolDefinition,
+  Tools,
+  ToolScriptingConfig,
+  ToolResult,
+  ResultSignal,
+  ToolResultValue,
+  OnToolResultCallback,
+} from './types';
 import type { MCPToolResult } from './mcp-adapter';
 
-export type { CodeModeOptions, ToolDefinition, Tools, ToolScriptingConfig, MCPToolResult };
+export type {
+  CodeModeOptions,
+  ToolDefinition,
+  Tools,
+  ToolScriptingConfig,
+  ToolResult,
+  MCPToolResult,
+  ResultSignal,
+  ToolResultValue,
+  OnToolResultCallback,
+};
 export { isMCPToolResult, adaptMCPToolResult, MCPToolError };
+
+/**
+ * Sentinel prefix used to signal script abort across the isolate boundary.
+ * The abort result is JSON-encoded after this prefix.
+ */
+const ABORT_SENTINEL = '__CIRCUIT_BREAKER_ABORT__';
+
+/**
+ * Creates an abort error with the result encoded in the message.
+ * Format: ABORT_SENTINEL + JSON.stringify(result)
+ */
+const createAbortError = (result: ToolResultValue): Error => {
+  const encoded = JSON.stringify(result);
+  return new Error(`${ABORT_SENTINEL}${encoded}`);
+};
+
+/**
+ * Checks if an error message is an abort signal and extracts the result.
+ * Returns the decoded result if it's an abort, or null otherwise.
+ */
+const parseAbortError = (message: string): ToolResultValue | null => {
+  if (!message.startsWith(ABORT_SENTINEL)) {
+    return null;
+  }
+  try {
+    return JSON.parse(message.slice(ABORT_SENTINEL.length));
+  } catch {
+    return null;
+  }
+};
 
 class CodeExecutionSandbox {
   private timeout: number;
@@ -25,7 +74,11 @@ class CodeExecutionSandbox {
     this.maxMemory = options.sandbox?.maxMemory || 128 * 1024 * 1024; // 128MB
   }
 
-  async execute(code: string, bindings: Record<string, Function>, includeExecutionTrace = false): Promise<any> {
+  async execute(
+    code: string,
+    bindings: Record<string, Function>,
+    includeExecutionTrace = false
+  ): Promise<any> {
     // Always log the script to console for debugging
     console.log('[toolScripting] Executing script:');
     console.log(code);
@@ -138,6 +191,19 @@ class CodeExecutionSandbox {
                 finished = true;
                 clearTimeout(wallTimer);
                 cleanup();
+
+                // Check if this is a circuit breaker abort signal
+                const abortResult = parseAbortError(msg);
+                if (abortResult !== null) {
+                  // Return abort result directly - client controls the format
+                  const abortResultStr =
+                    typeof abortResult === 'string'
+                      ? abortResult
+                      : JSON.stringify(abortResult);
+                  resolve(abortResultStr);
+                  return;
+                }
+
                 // Include execution log even on error
                 const formattedError = this.formatExecutionResult(executionLog, null, msg, includeExecutionTrace);
                 reject(new Error(formattedError));
@@ -213,7 +279,17 @@ function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_$]/g, '_');
 }
 
-function extractToolBindings(tools: Tools): Record<string, Function> {
+/**
+ * Extract tool bindings from tool definitions, wrapping each execute function
+ * to handle MCP adaptation and circuit breaker callbacks.
+ *
+ * @param tools - Tool definitions to extract bindings from
+ * @param onToolResult - Optional callback to inspect/modify results and signal abort
+ */
+function extractToolBindings(
+  tools: Tools,
+  onToolResult?: OnToolResultCallback
+): Record<string, Function> {
   const bindings: Record<string, Function> = {};
 
   for (const [name, tool] of Object.entries(tools)) {
@@ -225,18 +301,29 @@ function extractToolBindings(tools: Tools): Record<string, Function> {
     }
 
     const wrappedExecute = async (...args: any[]) => {
-        // If no arguments provided, pass empty object {} to match AI SDK tool expectations
-        // This handles the case where LLM calls getData() but tool expects getData({})
-        const executeArgs = args.length === 0 ? [{}] : args;
-        const result: any = await tool.execute!(...executeArgs);
+      // If no arguments provided, pass empty object {} to match AI SDK tool expectations
+      // This handles the case where LLM calls getData() but tool expects getData({})
+      const executeArgs = args.length === 0 ? [{}] : args;
+      let result: any = await tool.execute!(...executeArgs);
 
-        // Apply MCP adapter if result matches MCP tool result format
-        if (isMCPToolResult(result)) {
-            return adaptMCPToolResult(result, tool.outputSchema);
+      // Apply MCP adapter if result matches MCP tool result format
+      if (isMCPToolResult(result)) {
+        result = adaptMCPToolResult(result, tool.outputSchema);
+      }
+
+      // Circuit breaker callback - inspect result and optionally abort
+      if (onToolResult) {
+        const signal = onToolResult(name, result);
+        if (signal.signal === 'abort') {
+          // Throw error with result encoded in message - sandbox will detect and handle
+          throw createAbortError(signal.result);
         }
+        // Allow callback to modify result
+        return signal.result;
+      }
 
-        return result;
-    }
+      return result;
+    };
 
     bindings[sanitizedName] = wrappedExecute;
   }
@@ -330,8 +417,8 @@ export function toolScripting(aiFunction: Function, options: CodeModeOptions = {
     const { tools, system = '', scriptMetadataCallback, scriptResultCallback, ...restConfig } = config;
     const toolsObj: Tools = tools || {} as Tools;
 
-    // Extract tool bindings
-    const bindings = extractToolBindings(toolsObj);
+    // Extract tool bindings with circuit breaker callback
+    const bindings = extractToolBindings(toolsObj, options.onToolResult);
 
     // Create execution sandbox
     const sandbox = new CodeExecutionSandbox(options);
