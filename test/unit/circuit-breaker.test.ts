@@ -54,7 +54,7 @@ describe('onToolResult callback - circuit breaker', () => {
       }),
     };
 
-    const onToolResult: OnToolResultCallback = (toolName, result) => {
+    const onToolResult: OnToolResultCallback = (toolName, result, _toolArgs) => {
       toolCallResults.push({ toolName, result });
       return { signal: 'continue', result };
     };
@@ -85,7 +85,7 @@ describe('onToolResult callback - circuit breaker', () => {
     };
 
     let scriptResult: string | undefined;
-    const onToolResult: OnToolResultCallback = (_toolName, _result) => {
+    const onToolResult: OnToolResultCallback = (_toolName, _result, _toolArgs) => {
       // Modify the result
       return { signal: 'continue', result: { value: 100 } };
     };
@@ -136,7 +136,7 @@ describe('onToolResult callback - circuit breaker', () => {
       }),
     };
 
-    const onToolResult: OnToolResultCallback = (toolName, result) => {
+    const onToolResult: OnToolResultCallback = (toolName, result, _toolArgs) => {
       // Detect auth-required response and abort
       if (
         result &&
@@ -191,7 +191,7 @@ describe('onToolResult callback - circuit breaker', () => {
       }),
     };
 
-    const onToolResult: OnToolResultCallback = (_toolName, result) => {
+    const onToolResult: OnToolResultCallback = (_toolName, result, _toolArgs) => {
       if (
         result &&
         typeof result === 'object' &&
@@ -248,7 +248,7 @@ describe('onToolResult callback - circuit breaker', () => {
     };
 
     // Always continue
-    const onToolResult: OnToolResultCallback = (_toolName, result) => ({
+    const onToolResult: OnToolResultCallback = (_toolName, result, _toolArgs) => ({
       signal: 'continue',
       result,
     });
@@ -299,6 +299,67 @@ describe('onToolResult callback - circuit breaker', () => {
     assert.ok(scriptResult?.includes('42'));
   });
 
+  test('callback receives tool arguments', async () => {
+    const receivedArgs: Record<string, unknown>[] = [];
+
+    const tools = {
+      getUser: tool({
+        description: 'Get a user by ID',
+        inputSchema: z.object({ userId: z.string(), includeEmail: z.boolean() }),
+        outputSchema: z.object({ name: z.string() }),
+        execute: async ({ userId }: { userId: string; includeEmail: boolean }) => ({ name: `User ${userId}` }),
+      }),
+    };
+
+    const onToolResult: OnToolResultCallback = (_toolName, result, toolArgs) => {
+      receivedArgs.push(toolArgs);
+      return { signal: 'continue', result };
+    };
+
+    const model = createMockModel('return await getUser({ userId: "abc-123", includeEmail: true });');
+
+    await toolScripting(generateText, { onToolResult })({
+      model,
+      tools,
+      system: 'Test',
+      messages: [{ role: 'user', content: 'Get user' }],
+      maxSteps: 5,
+    });
+
+    assert.strictEqual(receivedArgs.length, 1);
+    assert.deepStrictEqual(receivedArgs[0], { userId: 'abc-123', includeEmail: true });
+  });
+
+  test('callback receives empty object for no-arg tool calls', async () => {
+    let receivedArgs: Record<string, unknown> | undefined;
+
+    const tools = {
+      ping: tool({
+        description: 'Ping',
+        inputSchema: z.object({}),
+        outputSchema: z.object({ pong: z.boolean() }),
+        execute: async () => ({ pong: true }),
+      }),
+    };
+
+    const onToolResult: OnToolResultCallback = (_toolName, result, toolArgs) => {
+      receivedArgs = toolArgs;
+      return { signal: 'continue', result };
+    };
+
+    const model = createMockModel('return await ping();');
+
+    await toolScripting(generateText, { onToolResult })({
+      model,
+      tools,
+      system: 'Test',
+      messages: [{ role: 'user', content: 'Ping' }],
+      maxSteps: 5,
+    });
+
+    assert.deepStrictEqual(receivedArgs, {});
+  });
+
   test('callback receives sanitized tool name', async () => {
     let receivedToolName: string | undefined;
 
@@ -312,7 +373,7 @@ describe('onToolResult callback - circuit breaker', () => {
       }),
     };
 
-    const onToolResult: OnToolResultCallback = (toolName, result) => {
+    const onToolResult: OnToolResultCallback = (toolName, result, _toolArgs) => {
       receivedToolName = toolName;
       return { signal: 'continue', result };
     };
