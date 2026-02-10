@@ -314,7 +314,7 @@ function extractToolBindings(
 
       // Circuit breaker callback - inspect result and optionally abort
       if (onToolResult) {
-        const signal = onToolResult(name, result);
+        const signal = onToolResult(name, result, executeArgs[0] as Record<string, unknown>);
         if (signal.signal === 'abort') {
           // Throw error with result encoded in message - sandbox will detect and handle
           throw createAbortError(signal.result);

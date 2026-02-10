@@ -19,11 +19,13 @@ export interface ResultSignal {
  *
  * @param toolName - The name of the tool that was executed
  * @param result - The result returned by the tool (after MCP adaptation)
+ * @param toolArgs - The arguments passed to the tool
  * @returns A signal indicating whether to continue or abort, along with the result
  */
 export type OnToolResultCallback = (
   toolName: string,
-  result: ToolResultValue
+  result: ToolResultValue,
+  toolArgs: Record<string, unknown>
 ) => ResultSignal;
 
 export interface CodeModeOptions {
@@ -57,7 +59,7 @@ export interface CodeModeOptions {
    *
    * @example
    * ```typescript
-   * onToolResult: (toolName, result) => {
+   * onToolResult: (toolName, result, toolArgs) => {
    *   if (isAuthRequired(result)) {
    *     return { signal: 'abort', result };
    *   }
