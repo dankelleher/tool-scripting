@@ -33,7 +33,18 @@ export interface CodeModeOptions {
     maxMemory?: number;
   };
   logEnhancedSystemPrompt?: boolean;
-  customToolSdkPrompt?: (toolDescriptions: string) => string;
+  /**
+   * Customize the code mode system prompt.
+   *
+   * Receives the generated TypeScript tool descriptions and the fully-assembled
+   * default prompt (with tool descriptions already interpolated).
+   *
+   * - **Append** to the default prompt:
+   *   `(tools, defaultPrompt) => `${defaultPrompt}\n\nAlways return dates in ISO format.``
+   * - **Replace** the default prompt entirely:
+   *   `(toolDescriptions) => `My custom prompt\n\n${toolDescriptions}``
+   */
+  customToolSdkPrompt?: (toolDescriptions: string, defaultPrompt: string) => string;
   onCodeGenerated?: (code: string) => void;
   onCodeExecuted?: (result: any) => void;
   onError?: (error: Error) => void;

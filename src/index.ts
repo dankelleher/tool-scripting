@@ -332,7 +332,7 @@ function extractToolBindings(
   return bindings;
 }
 
-function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions: string) => string): string {
+function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions: string, defaultPrompt: string) => string): string {
   const toolDescriptions = Object.entries(tools)
     .map(([name, tool]) => {
       // Use sanitized name in documentation to match what's available in the sandbox
@@ -364,12 +364,13 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
     })
     .join('\n\n');
 
-  // Use custom prompt if provided, otherwise use default
+  const defaultPrompt = DEFAULT_CODE_MODE_PROMPT(toolDescriptions);
+
   if (customPrompt) {
-    return customPrompt(toolDescriptions);
+    return customPrompt(toolDescriptions, defaultPrompt);
   }
 
-  return DEFAULT_CODE_MODE_PROMPT(toolDescriptions);
+  return defaultPrompt;
 }
 
 export function toolScripting(aiFunction: Function, options: CodeModeOptions = {}) {

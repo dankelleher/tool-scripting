@@ -103,17 +103,12 @@ const wrappedFunction = toolScripting(generateText, {
   // Debug options
   logEnhancedSystemPrompt: false, // Log the full system prompt to console (default: false)
 
-  // Custom prompt template
-  customToolSdkPrompt: (toolDescriptions) => `
-    # Your Custom Instructions
+  // Append extra instructions to the default prompt:
+  customToolSdkPrompt: (tools, defaultPrompt) =>
+    `${defaultPrompt}\n\nAlways return dates in ISO format.`,
 
-    Available functions:
-    \`\`\`typescript
-    ${toolDescriptions}
-    \`\`\`
-
-    Your custom usage notes here...
-  `,
+  // Or replace the default prompt entirely:
+  // customToolSdkPrompt: (toolDescriptions) => `My custom prompt\n\n${toolDescriptions}`,
 
   // Callbacks
   onCodeGenerated: (code) => console.log('Generated:', code),
