@@ -8,8 +8,14 @@ const tools = {
   getUserLocation: tool({
     description: 'Get user current location',
     inputSchema: z.object({}),
-    outputSchema: z.string().describe('The current location of the user'),
-    execute: async () => 'San Francisco, CA',
+    outputSchema: z.object({
+      location: z.string().describe('The current location of the user'),
+    }),
+    // Simulate what an MCP client returns: both content and structuredContent
+    execute: async () => ({
+      content: [{ type: 'text', text: 'San Francisco, CA' }],
+      structuredContent: { location: 'San Francisco, CA' },
+    }),
   }),
   getWeather: tool({
     description: 'Get weather for a location',
@@ -25,6 +31,20 @@ const tools = {
       location,
       temperature: 65,
       condition: 'foggy',
+    }),
+  }),
+  getLocalTime: tool({
+    description: 'Get local time for a location',
+    inputSchema: z.object({
+      location: z.string().describe('Location to get time for'),
+    }),
+    outputSchema: z.object({
+      time: z.string().describe('The current local time'),
+      timezone: z.string().describe('The timezone'),
+    }),
+    // Simulate MCP content-only response (no structuredContent) with JSON in text
+    execute: async () => ({
+      content: [{ type: 'text', text: JSON.stringify({ time: '3:45 PM', timezone: 'America/Los_Angeles' }) }],
     }),
   }),
 };
@@ -49,7 +69,7 @@ async function test() {
                 toolCallId: 'call_1',
                 toolName: 'runToolScript',
                 input: JSON.stringify({
-                  script: `const location = await getUserLocation();\nconst weather = await getWeather({ location });\nreturn { location, weather };`,
+                  script: `const { location } = await getUserLocation();\nconst weather = await getWeather({ location });\nconst localTime = await getLocalTime({ location });\nreturn { location, weather, localTime };`,
                   description: 'Get weather for user location'
                 })
               }

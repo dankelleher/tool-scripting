@@ -37,13 +37,43 @@ describe('isMCPToolResult', () => {
     assert.strictEqual(isMCPToolResult(null), false);
   });
 
-  test('returns false for object without isError', () => {
+  test('returns true for content without isError (optional per MCP spec)', () => {
     const result = { content: [{ type: 'text', text: 'hello' }] };
-    assert.strictEqual(isMCPToolResult(result), false);
+    assert.strictEqual(isMCPToolResult(result), true);
+  });
+
+  test('returns true for structuredContent without isError', () => {
+    const result = { structuredContent: { data: 'value' } };
+    assert.strictEqual(isMCPToolResult(result), true);
   });
 
   test('returns false for object without content or structuredContent', () => {
     const result = { isError: false };
+    assert.strictEqual(isMCPToolResult(result), false);
+  });
+
+  test('returns false for non-boolean isError', () => {
+    const result = { isError: 'yes', content: [{ type: 'text', text: 'hello' }] };
+    assert.strictEqual(isMCPToolResult(result), false);
+  });
+
+  test('returns false for content array without type field', () => {
+    const result = { content: [{ text: 'hello' }] };
+    assert.strictEqual(isMCPToolResult(result), false);
+  });
+
+  test('returns false for empty content array', () => {
+    const result = { content: [] };
+    assert.strictEqual(isMCPToolResult(result), false);
+  });
+
+  test('returns false for structuredContent that is an array', () => {
+    const result = { structuredContent: [1, 2, 3] };
+    assert.strictEqual(isMCPToolResult(result), false);
+  });
+
+  test('returns false for structuredContent that is null', () => {
+    const result = { structuredContent: null };
     assert.strictEqual(isMCPToolResult(result), false);
   });
 });
