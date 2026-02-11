@@ -1,18 +1,18 @@
 /**
  * Adapter for MCP tool execution results
  *
- * MCP tools return: { isError: boolean, result: { content?: Array<{type: string, text?: string}>, structuredContent?: any } }
+ * MCP tools return: { content?: Array<{type: string, text?: string}>, structuredContent?: any, isError?: boolean }
  * This adapter normalizes the result based on the tool's output schema.
  */
 
 export interface MCPToolResult {
-    isError: boolean;
+    isError?: boolean;
     content?: Array<{
         type: string;
         text?: string;
         [key: string]: any;
     }>;
-    structuredContent?: any;
+    structuredContent?: Record<string, unknown>;
 }
 
 /**
@@ -34,16 +34,33 @@ export class MCPToolError extends Error {
 }
 
 /**
- * Check if a result matches the MCP tool result format
+ * Check if a result matches the MCP tool result format.
+ *
+ * Detects MCP results by checking for `content` (array of content blocks)
+ * or `structuredContent` (object). `isError` is optional per the MCP spec
+ * and is often omitted for successful calls.
  */
 export function isMCPToolResult(result: any): result is MCPToolResult {
-    return (
-        result !== null &&
-        typeof result === 'object' &&
-        'isError' in result &&
-        typeof result.isError === 'boolean' &&
-        ('content' in result || 'structuredContent' in result)
-    );
+    if (result === null || typeof result !== 'object') {
+        return false;
+    }
+
+    // If isError is present, it must be a boolean
+    if ('isError' in result && typeof result.isError !== 'boolean') {
+        return false;
+    }
+
+    // Check for structuredContent (must be a plain object)
+    if ('structuredContent' in result && result.structuredContent !== null && typeof result.structuredContent === 'object' && !Array.isArray(result.structuredContent)) {
+        return true;
+    }
+
+    // Check for content (must be an array of content blocks with a 'type' field)
+    if ('content' in result && Array.isArray(result.content) && result.content.length > 0 && typeof result.content[0]?.type === 'string') {
+        return true;
+    }
+
+    return false;
 }
 
 /**
