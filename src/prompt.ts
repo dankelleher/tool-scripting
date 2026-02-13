@@ -61,6 +61,27 @@ const total = orders.reduce((sum, o) => sum + o.amount, 0);
 return { userId, orderCount: orders.length, total };
 \`\`\`
 
+### Looping & Iteration
+- **When a task requires iterating over a collection, use a loop within a single script.** Do not return intermediate lists or make separate script calls per item.
+- Use \`for...of\` for sequential iteration. Use \`Promise.all\` with \`.map()\` for parallel execution when items are independent.
+- Combine listing + iteration + aggregation in one script whenever possible.
+
+Example:
+\`\`\`typescript
+// Bad: returns the list, requiring another script per item
+const { objects } = await listObjects({ schema_name: "public" });
+return objects; // Don't do this - loop in the script instead
+
+// Good: list, loop, and collect results in a single script
+const { objects } = await listObjects({ schema_name: "public" });
+const results = [];
+for (const obj of objects) {
+  const details = await getObjectDetails({ schema_name: "public", object_name: obj.name });
+  results.push({ name: obj.name, columnCount: details.columns.length });
+}
+return results;
+\`\`\`
+
 ### Data Efficiency
 - **Retrieve only the smallest necessary information** from any tool output.
 
