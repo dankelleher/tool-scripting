@@ -32,7 +32,7 @@ export type {
   ToolResultValue,
   OnToolResultCallback,
 };
-export { isMCPToolResult, adaptMCPToolResult, MCPToolError, DEFAULT_CODE_MODE_PROMPT };
+export { isMCPToolResult, adaptMCPToolResult, MCPToolError, DEFAULT_CODE_MODE_PROMPT, generateCodeSystemPrompt, createCodeMode };
 
 /**
  * Sentinel prefix used to signal script abort across the isolate boundary.
@@ -373,20 +373,114 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
   return defaultPrompt;
 }
 
+/**
+ * Optional callbacks for script execution lifecycle events.
+ */
+export type ScriptCallbacks = {
+  scriptMetadataCallback?: (metadata: { description: string; script: string }) => void;
+  scriptResultCallback?: (result: any) => void;
+};
+
+/**
+ * Factory mode for code-mode tool scripting.
+ *
+ * Provides fine-grained control over tool creation and system prompt generation,
+ * enabling integration with dynamic tool refresh systems like `dynamicTools`.
+ *
+ * The sandbox instance is shared across tool refreshes — only the bindings change.
+ */
+export type CodeMode = {
+  /**
+   * Create a `{ runToolScript }` tool set from the given tools.
+   * Each call returns a new tool with fresh bindings baked into its closure.
+   */
+  createTool: (tools: Tools, callbacks?: ScriptCallbacks) => Tools;
+
+  /**
+   * Generate the TypeScript API descriptions system prompt for the given tools.
+   * Returns an empty string when tools is empty.
+   */
+  generateSystemPrompt: (tools: Tools) => string;
+};
+
+/**
+ * Factory mode: create a code-mode instance with explicit control over
+ * tool creation and system prompt generation.
+ *
+ * Use this when you need to refresh tools independently (e.g. with `dynamicTools`):
+ *
+ * @example
+ * ```typescript
+ * const codeMode = createCodeMode({ sandbox: { allowConsole: true } });
+ * const tools = codeMode.createTool(mcpTools);
+ * const systemPrompt = codeMode.generateSystemPrompt(mcpTools);
+ *
+ * // On refresh:
+ * const freshTools = codeMode.createTool(newMcpTools);
+ * const freshPrompt = codeMode.generateSystemPrompt(newMcpTools);
+ * ```
+ */
+function createCodeMode(options: CodeModeOptions = {}): CodeMode {
+  const sandbox = new CodeExecutionSandbox(options);
+
+  return {
+    createTool: (tools: Tools, callbacks?: ScriptCallbacks): Tools => {
+      const bindings = extractToolBindings(tools, options.onToolResult);
+
+      return {
+        runToolScript: {
+          description: 'Execute the provided tool script with available functions',
+          inputSchema: z.object({
+            description: z.string().describe('Brief human-friendly description of what this script does'),
+            script: z.string().describe('The JavaScript code to execute'),
+            includeExecutionTrace: z.boolean().optional().describe('Set to true ONLY when debugging to see each function call and result. Omit or set to false by default to reduce token usage and allow efficient extraction of data from large responses'),
+          }),
+          execute: async ({ description, script, includeExecutionTrace }: { description: string; script: string; includeExecutionTrace?: boolean }) => {
+            callbacks?.scriptMetadataCallback?.({ description, script });
+
+            const result = await sandbox.execute(script, bindings, includeExecutionTrace);
+
+            console.log('[toolScripting] Script execution complete, result type:', typeof result, result === undefined ? 'UNDEFINED!' : result === null ? 'NULL!' : `length: ${(result as any)?.length || 'N/A'}`);
+
+            callbacks?.scriptResultCallback?.(result);
+
+            return result;
+          },
+        },
+      } as Tools;
+    },
+
+    generateSystemPrompt: (tools: Tools): string => {
+      if (Object.keys(tools).length === 0) return '';
+      return generateCodeSystemPrompt(tools, options.customToolSdkPrompt);
+    },
+  };
+}
+
+/**
+ * Default mode: wraps an AI SDK function (e.g. `streamText`) to replace all tools
+ * with a single `runToolScript` tool and inject the code-mode system prompt.
+ *
+ * This is a convenience wrapper around `createCodeMode` for simple use cases
+ * where tools don't need to be refreshed mid-stream.
+ *
+ * @example
+ * ```typescript
+ * const enhanced = toolScripting(streamText, { sandbox: { allowConsole: true } });
+ * const result = await enhanced({ model, messages, tools, system });
+ * ```
+ */
 export function toolScripting(aiFunction: Function, options: CodeModeOptions = {}) {
+  const codeMode = createCodeMode(options);
+
   return async function(config: ToolScriptingConfig) {
     const { tools, system = '', scriptMetadataCallback, scriptResultCallback, ...restConfig } = config;
     const toolsObj: Tools = tools || {} as Tools;
 
-    // Extract tool bindings with circuit breaker callback
-    const bindings = extractToolBindings(toolsObj, options.onToolResult);
+    const codeModeTools = codeMode.createTool(toolsObj, { scriptMetadataCallback, scriptResultCallback });
 
-    // Create execution sandbox
-    const sandbox = new CodeExecutionSandbox(options);
-
-    // Enhanced system prompt (omit Tool Calling SDK if there are no tools)
     const hasTools = Object.keys(toolsObj).length > 0;
-    const codeSystemPrompt = hasTools ? generateCodeSystemPrompt(toolsObj, options.customToolSdkPrompt) : '';
+    const codeSystemPrompt = hasTools ? codeMode.generateSystemPrompt(toolsObj) : '';
     const enhancedSystem = hasTools
       ? (system ? `${system}\n\n${codeSystemPrompt}` : codeSystemPrompt)
       : system;
@@ -395,41 +489,9 @@ export function toolScripting(aiFunction: Function, options: CodeModeOptions = {
       console.log('[toolScripting] Enhanced System Prompt:\n', enhancedSystem);
     }
 
-    // Provide exactly one tool to the SDK: runToolScript
-    const singleTool = {
-      runToolScript: {
-        description: 'Execute the provided tool script with available functions',
-        inputSchema: z.object({
-          description: z.string().describe('Brief human-friendly description of what this script does'),
-          script: z.string().describe('The JavaScript code to execute'),
-          includeExecutionTrace: z.boolean().optional().describe('Set to true ONLY when debugging to see each function call and result. Omit or set to false by default to reduce token usage and allow efficient extraction of data from large responses')
-        }),
-        execute: async ({ description, script, includeExecutionTrace }: { description: string; script: string; includeExecutionTrace?: boolean }) => {
-          // Notify about script execution start with description
-          if (scriptMetadataCallback) {
-            scriptMetadataCallback({ description, script });
-          }
-
-          const result = await sandbox.execute(script, bindings, includeExecutionTrace);
-
-          // Debug logging
-          console.log('[toolScripting] Script execution complete, result type:', typeof result, result === undefined ? 'UNDEFINED!' : result === null ? 'NULL!' : `length: ${(result as any)?.length || 'N/A'}`);
-
-          // Notify about script execution result
-          if (scriptResultCallback) {
-            scriptResultCallback(result);
-          }
-
-          // Return just the execution result (description already streamed to client)
-          return result;
-        }
-      }
-    } as Tools;
-
-    // Call original AI function with enhanced system prompt and single tool
     return aiFunction({
       ...restConfig,
-      tools: singleTool,
+      tools: codeModeTools,
       system: enhancedSystem,
     });
   };

@@ -265,6 +265,57 @@ getWeather: ({
 - Optional parameters are marked with `?`
 - Tools without `outputSchema` return `Promise<unknown>`
 
+## Factory mode (`createCodeMode`)
+
+For advanced use cases where you need control over the tool lifecycle — e.g. refreshing tools mid-stream — use `createCodeMode` instead of the `toolScripting` wrapper:
+
+```typescript
+import { createCodeMode } from 'tool-scripting';
+
+const codeMode = createCodeMode({
+  sandbox: { allowConsole: true },
+  onToolResult: myCircuitBreaker,
+});
+
+// Create the runToolScript tool with bindings baked into its closure
+const codeModeTools = codeMode.createTool(mcpTools);
+
+// Generate the TypeScript API descriptions for the system prompt
+const codeSystemPrompt = codeMode.generateSystemPrompt(mcpTools);
+
+// Use with streamText directly
+const result = streamText({
+  model,
+  tools: codeModeTools,
+  system: `${baseSystemPrompt}\n\n${codeSystemPrompt}`,
+  messages,
+});
+```
+
+### Refreshing tools
+
+Each call to `createTool` returns a new `{ runToolScript }` with fresh bindings. The sandbox instance is shared across refreshes — only the bindings change.
+
+```typescript
+// After tools change, create a fresh runToolScript and updated prompt
+const freshTools = codeMode.createTool(newMcpTools);
+const freshPrompt = codeMode.generateSystemPrompt(newMcpTools);
+```
+
+### API
+
+#### `createCodeMode(options?: CodeModeOptions): CodeMode`
+
+Creates a code-mode instance. Accepts the same options as `toolScripting`.
+
+#### `CodeMode.createTool(tools, callbacks?): Tools`
+
+Returns `{ runToolScript }` with bindings from the given tools. Optional `callbacks` parameter accepts `scriptMetadataCallback` and `scriptResultCallback`.
+
+#### `CodeMode.generateSystemPrompt(tools): string`
+
+Returns the TypeScript API descriptions string for the given tools. Returns an empty string when tools is empty.
+
 ## Requirements
 
 - Node.js 18+

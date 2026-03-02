@@ -27,6 +27,12 @@ ${toolDescriptions}
 
 (Warning: The examples ahead should not be treated as indicative of any real tool input or output, they are just illustrating the points.)
 
+### Single Script Principle (CRITICAL)
+- **Complete the entire task in a single script call.** This is the most important rule.
+- Listing items, iterating over them, and aggregating results must ALL happen in one script.
+- Never call \`runToolScript\` multiple times to process items one-by-one. Each \`runToolScript\` call should be self-contained and complete.
+- The only acceptable reason for a second script call is to recover from an unexpected error in the first.
+
 ### Output Structure Discovery
 - **Never assume a tool's output structure.** If the output schema is unknown, make a single minimal test call (smallest possible input, 1–3 rows) to infer the structure.
 - Once inferred, reuse that structure consistently. Do not guess or re-test.
@@ -44,7 +50,7 @@ const names = results.rows.map(r => r.name);
 \`\`\`
 
 ### Tool Chaining
-- **Code mode exists to chain tools together.** Tool outputs should flow directly into subsequent tool calls.
+- **Code mode exists to chain tools together.** Tool outputs should flow directly into subsequent tool calls within the same script.
 - Do not split related tool calls into separate scripts or disconnected steps.
 - Prefer explicit chaining: pass outputs directly as inputs to the next tool.
 
@@ -68,16 +74,18 @@ return { userId, orderCount: orders.length, total };
 
 Example:
 \`\`\`typescript
-// Bad: returns the list, requiring another script per item
-const { objects } = await listObjects({ schema_name: "public" });
-return objects; // Don't do this - loop in the script instead
+// WRONG: Making separate script calls per item (one runToolScript per table)
+// Script 1: const tables = await listObjects({ schema_name: "public" }); return tables;
+// Script 2: const count = await executeSql({ sql: "SELECT COUNT(*) FROM table1" }); return count;
+// Script 3: const count = await executeSql({ sql: "SELECT COUNT(*) FROM table2" }); return count;
+// ... This is NEVER acceptable. Do it all in ONE script:
 
-// Good: list, loop, and collect results in a single script
+// CORRECT: Single script with loop
 const { objects } = await listObjects({ schema_name: "public" });
 const results = [];
 for (const obj of objects) {
-  const details = await getObjectDetails({ schema_name: "public", object_name: obj.name });
-  results.push({ name: obj.name, columnCount: details.columns.length });
+  const { rows } = await executeSql({ sql: \\\`SELECT COUNT(*) as count FROM "\\\${obj.name}"\\\` });
+  results.push({ table: obj.name, rows: rows[0].count });
 }
 return results;
 \`\`\`

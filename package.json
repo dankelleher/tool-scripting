@@ -1,6 +1,6 @@
 {
   "name": "@civic/tool-scripting",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Code mode tool call scripting for Vercel AI SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,8 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node test/unit/basic.js && npx tsx --test test/unit/*.test.ts",
-    "test:int": "node test/integration/integration.js"
+    "test": "npx tsx --test test/unit/*.test.ts",
+    "test:int": "npx tsx --test test/integration/*.test.ts"
   },
   "keywords": [
     "ai",
