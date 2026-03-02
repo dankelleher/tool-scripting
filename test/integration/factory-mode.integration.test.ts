@@ -1,15 +1,17 @@
 import 'dotenv/config';
-import { describe, test, before } from 'node:test';
 import assert from 'node:assert';
-import { createCodeMode } from '../../dist/index.js';
-import { generateText, tool, stepCountIs } from 'ai';
-import { z } from 'zod';
+import { before, describe, test } from 'node:test';
 import { anthropic } from '@ai-sdk/anthropic';
+import { generateText, stepCountIs, tool } from 'ai';
+import { z } from 'zod';
+import { createCodeMode } from '../../dist/index.js';
 
 describe('createCodeMode integration', () => {
   before(() => {
     if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('Missing ANTHROPIC_API_KEY in environment. Skipping integration test.');
+      console.error(
+        'Missing ANTHROPIC_API_KEY in environment. Skipping integration test.',
+      );
       process.exit(1);
     }
   });
@@ -48,9 +50,7 @@ describe('createCodeMode integration', () => {
       model: anthropic('claude-sonnet-4-5-20250929'),
       tools: codeModeTools,
       system: `You are a helpful assistant.\n\n${systemPrompt}`,
-      messages: [
-        { role: 'user', content: 'What is the weather like today?' },
-      ],
+      messages: [{ role: 'user', content: 'What is the weather like today?' }],
       stopWhen: stepCountIs(5),
     });
 
@@ -69,9 +69,7 @@ describe('createCodeMode integration', () => {
       model: anthropic('claude-sonnet-4-5-20250929'),
       tools: v1Tools,
       system: `You are a helpful assistant.\n\n${v1Prompt}`,
-      messages: [
-        { role: 'user', content: 'What is the weather like today?' },
-      ],
+      messages: [{ role: 'user', content: 'What is the weather like today?' }],
       stopWhen: stepCountIs(5),
     });
 
@@ -100,8 +98,14 @@ describe('createCodeMode integration', () => {
     const v2Prompt = codeMode.generateSystemPrompt(refreshedToolDefs);
 
     // Verify the prompt now includes the new tool
-    assert.ok(v2Prompt.includes('getLocalTime'), 'Refreshed prompt should include getLocalTime');
-    assert.ok(v2Prompt.includes('getWeather'), 'Refreshed prompt should still include getWeather');
+    assert.ok(
+      v2Prompt.includes('getLocalTime'),
+      'Refreshed prompt should include getLocalTime',
+    );
+    assert.ok(
+      v2Prompt.includes('getWeather'),
+      'Refreshed prompt should still include getWeather',
+    );
 
     const result2 = await generateText({
       model: anthropic('claude-sonnet-4-5-20250929'),
@@ -114,6 +118,9 @@ describe('createCodeMode integration', () => {
     });
 
     assert.ok(result2.response, 'Step 2 should receive a response');
-    console.log('Refreshed response:', JSON.stringify(result2.response, null, 2));
+    console.log(
+      'Refreshed response:',
+      JSON.stringify(result2.response, null, 2),
+    );
   });
 });

@@ -1,8 +1,8 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert';
+import { describe, test } from 'node:test';
 import {
-  isMCPToolResult,
   adaptMCPToolResult,
+  isMCPToolResult,
   MCPToolError,
 } from '../../src/mcp-adapter';
 
@@ -53,7 +53,10 @@ describe('isMCPToolResult', () => {
   });
 
   test('returns false for non-boolean isError', () => {
-    const result = { isError: 'yes', content: [{ type: 'text', text: 'hello' }] };
+    const result = {
+      isError: 'yes',
+      content: [{ type: 'text', text: 'hello' }],
+    };
     assert.strictEqual(isMCPToolResult(result), false);
   });
 
@@ -137,7 +140,11 @@ describe('adaptMCPToolResult - success cases', () => {
       content: [{ type: 'image', data: 'base64data', mimeType: 'image/png' }],
     };
     const adapted = adaptMCPToolResult(result);
-    assert.deepStrictEqual(adapted, { type: 'image', data: 'base64data', mimeType: 'image/png' });
+    assert.deepStrictEqual(adapted, {
+      type: 'image',
+      data: 'base64data',
+      mimeType: 'image/png',
+    });
   });
 });
 
@@ -148,16 +155,15 @@ describe('adaptMCPToolResult - error cases', () => {
       content: [{ type: 'text', text: 'Tool execution failed: invalid input' }],
     };
 
-    assert.throws(
-      () => adaptMCPToolResult(result),
-      MCPToolError
-    );
+    assert.throws(() => adaptMCPToolResult(result), MCPToolError);
   });
 
   test('MCPToolError message is extracted from content text', () => {
     const result = {
       isError: true,
-      content: [{ type: 'text', text: 'Invalid parameter: location is required' }],
+      content: [
+        { type: 'text', text: 'Invalid parameter: location is required' },
+      ],
     };
 
     try {
@@ -165,7 +171,10 @@ describe('adaptMCPToolResult - error cases', () => {
       assert.fail('Expected MCPToolError to be thrown');
     } catch (error) {
       assert.ok(error instanceof MCPToolError);
-      assert.strictEqual(error.message, 'Invalid parameter: location is required');
+      assert.strictEqual(
+        error.message,
+        'Invalid parameter: location is required',
+      );
     }
   });
 
@@ -199,7 +208,10 @@ describe('adaptMCPToolResult - error cases', () => {
       assert.fail('Expected MCPToolError to be thrown');
     } catch (error) {
       assert.ok(error instanceof MCPToolError);
-      assert.deepStrictEqual(error.structuredContent, { errorCode: 'INVALID_INPUT', field: 'location' });
+      assert.deepStrictEqual(error.structuredContent, {
+        errorCode: 'INVALID_INPUT',
+        field: 'location',
+      });
     }
   });
 

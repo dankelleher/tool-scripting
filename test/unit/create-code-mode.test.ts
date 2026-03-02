@@ -1,9 +1,9 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert';
-import { createCodeMode } from '../../dist/index.js';
-import type { OnToolResultCallback } from '../../src/types';
+import { describe, test } from 'node:test';
 import { tool } from 'ai';
 import { z } from 'zod';
+import { createCodeMode } from '../../dist/index.js';
+import type { OnToolResultCallback } from '../../src/types';
 
 /**
  * Helper: create a simple tool set for testing.
@@ -16,10 +16,12 @@ function createTestTools() {
         location: z.string().describe('Location to get forecast for'),
       }),
       outputSchema: z.object({
-        temperature: z.number().describe('The current temperature in Fahrenheit'),
+        temperature: z
+          .number()
+          .describe('The current temperature in Fahrenheit'),
         condition: z.string().describe('The current weather conditions'),
       }),
-      execute: async ({ location }: { location: string }) => ({
+      execute: async () => ({
         temperature: 72,
         condition: 'sunny',
       }),
@@ -46,9 +48,16 @@ describe('createCodeMode factory', () => {
     const tools = codeMode.createTool(createTestTools());
 
     assert.ok('runToolScript' in tools, 'Should contain runToolScript');
-    assert.strictEqual(Object.keys(tools).length, 1, 'Should only contain runToolScript');
+    assert.strictEqual(
+      Object.keys(tools).length,
+      1,
+      'Should only contain runToolScript',
+    );
     assert.strictEqual(typeof tools.runToolScript.execute, 'function');
-    assert.ok(tools.runToolScript.description, 'runToolScript should have a description');
+    assert.ok(
+      tools.runToolScript.description,
+      'runToolScript should have a description',
+    );
   });
 
   test('generateSystemPrompt returns TypeScript API descriptions', () => {
@@ -56,7 +65,10 @@ describe('createCodeMode factory', () => {
     const prompt = codeMode.generateSystemPrompt(createTestTools());
 
     assert.ok(prompt.length > 0, 'Prompt should not be empty');
-    assert.ok(prompt.includes('lookupForecast'), 'Prompt should mention getWeather');
+    assert.ok(
+      prompt.includes('lookupForecast'),
+      'Prompt should mention getWeather',
+    );
     assert.ok(prompt.includes('lookupTime'), 'Prompt should mention getTime');
     assert.ok(prompt.includes('location'), 'Prompt should mention parameters');
   });
@@ -115,13 +127,19 @@ describe('createCodeMode factory', () => {
       description: 'Call counter',
       script: 'return await counter();',
     });
-    assert.ok(result1.includes('v1-'), `v1 tool should be called, got: ${result1}`);
+    assert.ok(
+      result1.includes('v1-'),
+      `v1 tool should be called, got: ${result1}`,
+    );
 
     const result2 = await runV2.runToolScript.execute({
       description: 'Call counter',
       script: 'return await counter();',
     });
-    assert.ok(result2.includes('v2-'), `v2 tool should be called, got: ${result2}`);
+    assert.ok(
+      result2.includes('v2-'),
+      `v2 tool should be called, got: ${result2}`,
+    );
   });
 
   test('createTool invokes scriptMetadataCallback', async () => {
@@ -129,7 +147,9 @@ describe('createCodeMode factory', () => {
     let captured: { description: string; script: string } | undefined;
 
     const tools = codeMode.createTool(createTestTools(), {
-      scriptMetadataCallback: (meta) => { captured = meta; },
+      scriptMetadataCallback: (meta) => {
+        captured = meta;
+      },
     });
 
     await tools.runToolScript.execute({
@@ -147,7 +167,9 @@ describe('createCodeMode factory', () => {
     let capturedResult: unknown;
 
     const tools = codeMode.createTool(createTestTools(), {
-      scriptResultCallback: (r) => { capturedResult = r; },
+      scriptResultCallback: (r) => {
+        capturedResult = r;
+      },
     });
 
     await tools.runToolScript.execute({
@@ -156,13 +178,19 @@ describe('createCodeMode factory', () => {
     });
 
     assert.ok(capturedResult, 'scriptResultCallback should have been called');
-    assert.ok(String(capturedResult).includes('hello world'), `Result should contain "hello world", got: ${capturedResult}`);
+    assert.ok(
+      String(capturedResult).includes('hello world'),
+      `Result should contain "hello world", got: ${capturedResult}`,
+    );
   });
 
   test('onToolResult circuit breaker works in factory mode', async () => {
     const onToolResult: OnToolResultCallback = (toolName, result) => {
       if (toolName === 'dangerousTool') {
-        return { signal: 'abort', result: 'Operation blocked by circuit breaker' };
+        return {
+          signal: 'abort',
+          result: 'Operation blocked by circuit breaker',
+        };
       }
       return { signal: 'continue', result };
     };
@@ -184,8 +212,10 @@ describe('createCodeMode factory', () => {
       script: 'return await dangerousTool();',
     });
 
-    assert.ok(result.includes('Operation blocked by circuit breaker'),
-      `Circuit breaker should abort, got: ${result}`);
+    assert.ok(
+      result.includes('Operation blocked by circuit breaker'),
+      `Circuit breaker should abort, got: ${result}`,
+    );
   });
 
   test('generateSystemPrompt reflects different tool sets', () => {
@@ -208,8 +238,14 @@ describe('createCodeMode factory', () => {
     };
 
     const prompt2 = codeMode.generateSystemPrompt(differentTools);
-    assert.ok(prompt2.includes('sendEmail'), 'Second prompt should mention sendEmail');
-    assert.ok(!prompt2.includes('lookupForecast'), 'Second prompt should not mention lookupForecast');
+    assert.ok(
+      prompt2.includes('sendEmail'),
+      'Second prompt should mention sendEmail',
+    );
+    assert.ok(
+      !prompt2.includes('lookupForecast'),
+      'Second prompt should not mention lookupForecast',
+    );
   });
 
   test('sandbox options are respected', async () => {
@@ -232,19 +268,25 @@ describe('createCodeMode factory', () => {
       script: 'console.log("test"); return "done";',
     });
 
-    assert.ok(result.includes('done'), `Should succeed with console disabled, got: ${result}`);
+    assert.ok(
+      result.includes('done'),
+      `Should succeed with console disabled, got: ${result}`,
+    );
   });
 
   test('customToolSdkPrompt is respected in factory mode', () => {
     const codeMode = createCodeMode({
-      customToolSdkPrompt: (toolDescriptions, defaultPrompt) =>
+      customToolSdkPrompt: (toolDescriptions, _defaultPrompt) =>
         `CUSTOM PREFIX\n\n${toolDescriptions}\n\nCUSTOM SUFFIX`,
     });
 
     const prompt = codeMode.generateSystemPrompt(createTestTools());
     assert.ok(prompt.includes('CUSTOM PREFIX'), 'Should include custom prefix');
     assert.ok(prompt.includes('CUSTOM SUFFIX'), 'Should include custom suffix');
-    assert.ok(prompt.includes('lookupForecast'), 'Should still include tool descriptions');
+    assert.ok(
+      prompt.includes('lookupForecast'),
+      'Should still include tool descriptions',
+    );
   });
 });
 
@@ -266,7 +308,10 @@ describe('createCodeMode simulates dynamic tool refresh', () => {
       description: 'Greet',
       script: 'return await greet({ name: "Alice" });',
     });
-    assert.ok(result1.includes('Hello, Alice'), `Initial tool should work, got: ${result1}`);
+    assert.ok(
+      result1.includes('Hello, Alice'),
+      `Initial tool should work, got: ${result1}`,
+    );
 
     // Simulate refresh: create new tool set with an additional tool
     const refreshedTools = {
@@ -293,8 +338,14 @@ describe('createCodeMode simulates dynamic tool refresh', () => {
         'return hi + " " + bye;',
       ].join('\n'),
     });
-    assert.ok(result2.includes('Hi, Bob'), `Refreshed greet should use new impl, got: ${result2}`);
-    assert.ok(result2.includes('Goodbye, Bob'), `Should have access to new farewell tool, got: ${result2}`);
+    assert.ok(
+      result2.includes('Hi, Bob'),
+      `Refreshed greet should use new impl, got: ${result2}`,
+    );
+    assert.ok(
+      result2.includes('Goodbye, Bob'),
+      `Should have access to new farewell tool, got: ${result2}`,
+    );
   });
 
   test('generateSystemPrompt updates after tool refresh', () => {

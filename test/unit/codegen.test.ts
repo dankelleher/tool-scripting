@@ -1,15 +1,15 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert';
+import { describe, test } from 'node:test';
 import { z } from 'zod';
 import {
-  toPascalCase,
-  jsonSchemaToTypeString,
-  getSchemaDescription,
-  toJsonSchema,
-  getParamEntries,
-  getOutputSchemaInfo,
-  generateTypeDefinition,
   generateFunctionTypeDeclaration,
+  generateTypeDefinition,
+  getOutputSchemaInfo,
+  getParamEntries,
+  getSchemaDescription,
+  jsonSchemaToTypeString,
+  toJsonSchema,
+  toPascalCase,
 } from '../../src/codegen';
 import type { ToolDefinition } from '../../src/types';
 
@@ -75,7 +75,7 @@ describe('jsonSchemaToTypeString - Arrays', () => {
   test('handles array type (JSON Schema)', () => {
     assert.strictEqual(
       jsonSchemaToTypeString({ type: 'array', items: { type: 'string' } }),
-      'string[]'
+      'string[]',
     );
   });
 
@@ -85,7 +85,7 @@ describe('jsonSchemaToTypeString - Arrays', () => {
         type: 'array',
         items: { type: 'array', items: { type: 'number' } },
       }),
-      'number[][]'
+      'number[][]',
     );
   });
 });
@@ -369,7 +369,11 @@ describe('getOutputSchemaInfo', () => {
 describe('generateTypeDefinition', () => {
   test('generates type with properties', () => {
     const result = generateTypeDefinition('Weather', [
-      { name: 'temperature', type: 'number', description: 'Temperature in Fahrenheit' },
+      {
+        name: 'temperature',
+        type: 'number',
+        description: 'Temperature in Fahrenheit',
+      },
       { name: 'condition', type: 'string', description: 'Weather condition' },
     ]);
 
@@ -404,7 +408,7 @@ describe('generateFunctionTypeDeclaration', () => {
       'getUserLocation',
       'Get user current location',
       [],
-      'string'
+      'string',
     );
 
     const expected = `// Get user current location
@@ -425,7 +429,7 @@ getUserLocation: () => Promise<string>;`;
           optional: false,
         },
       ],
-      'Weather'
+      'Weather',
     );
 
     const expected = `// Get weather for a location
@@ -445,7 +449,7 @@ getWeather: ({
         { name: 'query', type: 'string', optional: false },
         { name: 'limit', type: 'number', optional: true },
       ],
-      'SearchResult[]'
+      'SearchResult[]',
     );
 
     const expected = `// Search for items
@@ -469,7 +473,7 @@ search: ({
           optional: false,
         },
       ],
-      'Result'
+      'Result',
     );
 
     const expected = `// This is a complex operation
@@ -489,11 +493,26 @@ complexOperation: ({
       'createUser',
       'Create a new user',
       [
-        { name: 'name', type: 'string', description: 'User name', optional: false },
-        { name: 'email', type: 'string', description: 'User email', optional: false },
-        { name: 'age', type: 'number', description: 'User age', optional: true },
+        {
+          name: 'name',
+          type: 'string',
+          description: 'User name',
+          optional: false,
+        },
+        {
+          name: 'email',
+          type: 'string',
+          description: 'User email',
+          optional: false,
+        },
+        {
+          name: 'age',
+          type: 'number',
+          description: 'User age',
+          optional: true,
+        },
       ],
-      'User'
+      'User',
     );
 
     const expected = `// Create a new user
@@ -519,7 +538,9 @@ describe('Integration: full tool definition conversion', () => {
       }),
       outputSchema: z.object({
         location: z.string().describe('The location of the weather report'),
-        temperature: z.number().describe('The current temperature in Fahrenheit'),
+        temperature: z
+          .number()
+          .describe('The current temperature in Fahrenheit'),
         condition: z.string().describe('The current weather conditions'),
       }),
       execute: async () => ({
@@ -543,7 +564,10 @@ describe('Integration: full tool definition conversion', () => {
     assert.strictEqual(outputInfo.properties.length, 3);
 
     // Test type definition generation
-    const typeDef = generateTypeDefinition('GetWeatherResult', outputInfo.properties);
+    const typeDef = generateTypeDefinition(
+      'GetWeatherResult',
+      outputInfo.properties,
+    );
     const expectedTypeDef = `type GetWeatherResult = {
   /** The location of the weather report */
   location: string;
@@ -559,7 +583,7 @@ describe('Integration: full tool definition conversion', () => {
       'getWeather',
       tool.description,
       params,
-      'GetWeatherResult'
+      'GetWeatherResult',
     );
     const expectedFuncDecl = `// Get weather for a location
 getWeather: ({
@@ -586,7 +610,7 @@ getWeather: ({
       'getUserLocation',
       tool.description,
       params,
-      'string'
+      'string',
     );
     const expectedFuncDecl = `// Get user current location
 getUserLocation: () => Promise<string>;`;

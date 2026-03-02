@@ -1,15 +1,17 @@
 import 'dotenv/config';
-import { describe, test, before } from 'node:test';
 import assert from 'node:assert';
-import { toolScripting } from '../../dist/index.js';
-import { generateText, tool, stepCountIs } from 'ai';
-import { z } from 'zod';
+import { before, describe, test } from 'node:test';
 import { anthropic } from '@ai-sdk/anthropic';
+import { generateText, stepCountIs, tool } from 'ai';
+import { z } from 'zod';
+import { toolScripting } from '../../dist/index.js';
 
 describe('integration', () => {
   before(() => {
     if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('Missing ANTHROPIC_API_KEY in environment. Skipping integration test.');
+      console.error(
+        'Missing ANTHROPIC_API_KEY in environment. Skipping integration test.',
+      );
       process.exit(1);
     }
   });
@@ -43,13 +45,14 @@ describe('integration', () => {
     const codeModeOptions = {
       logEnhancedSystemPrompt: true,
     };
-    const result = await toolScripting(generateText, codeModeOptions)({
+    const result = await toolScripting(
+      generateText,
+      codeModeOptions,
+    )({
       model: anthropic('claude-sonnet-4-5-20250929'),
       tools,
       system: 'You are a helpful assistant.',
-      messages: [
-        { role: 'user', content: 'What is the weather like today?' },
-      ],
+      messages: [{ role: 'user', content: 'What is the weather like today?' }],
       stopWhen: stepCountIs(5),
     });
 

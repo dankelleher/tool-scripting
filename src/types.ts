@@ -25,7 +25,7 @@ export interface ResultSignal {
 export type OnToolResultCallback = (
   toolName: string,
   result: ToolResultValue,
-  toolArgs: Record<string, unknown>
+  toolArgs: Record<string, unknown>,
 ) => ResultSignal;
 
 export interface CodeModeOptions {
@@ -46,7 +46,10 @@ export interface CodeModeOptions {
    * - **Replace** the default prompt entirely:
    *   `(toolDescriptions) => `My custom prompt\n\n${toolDescriptions}``
    */
-  customToolSdkPrompt?: (toolDescriptions: string, defaultPrompt: string) => string;
+  customToolSdkPrompt?: (
+    toolDescriptions: string,
+    defaultPrompt: string,
+  ) => string;
   onCodeGenerated?: (code: string) => void;
   onCodeExecuted?: (result: any) => void;
   onError?: (error: Error) => void;
@@ -74,7 +77,7 @@ export type ToolResult = {
   isError: boolean;
   content?: any[];
   structuredContent?: Record<string, any>;
-}
+};
 
 export interface ToolDefinition {
   description?: string;
@@ -90,7 +93,10 @@ export interface Tools {
 export interface ToolScriptingConfig {
   tools?: Tools;
   system?: string;
-  scriptMetadataCallback?: (metadata: { description: string; script: string }) => void;
+  scriptMetadataCallback?: (metadata: {
+    description: string;
+    script: string;
+  }) => void;
   scriptResultCallback?: (result: any) => void;
   [key: string]: any; // Allow other properties to pass through to the AI function
 }

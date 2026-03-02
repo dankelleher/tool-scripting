@@ -1,25 +1,29 @@
 import ivm from 'isolated-vm';
 import { z } from 'zod';
 import {
-  toPascalCase,
-  getParamEntries,
-  getOutputSchemaInfo,
-  generateTypeDefinition,
   generateFunctionTypeDeclaration,
+  generateTypeDefinition,
+  getOutputSchemaInfo,
+  getParamEntries,
+  toPascalCase,
 } from './codegen';
+import type { MCPToolResult } from './mcp-adapter';
+import {
+  adaptMCPToolResult,
+  isMCPToolResult,
+  MCPToolError,
+} from './mcp-adapter';
 import { DEFAULT_CODE_MODE_PROMPT } from './prompt';
-import { isMCPToolResult, adaptMCPToolResult, MCPToolError } from './mcp-adapter';
 import type {
   CodeModeOptions,
-  ToolDefinition,
-  Tools,
-  ToolScriptingConfig,
-  ToolResult,
-  ResultSignal,
-  ToolResultValue,
   OnToolResultCallback,
+  ResultSignal,
+  ToolDefinition,
+  ToolResult,
+  ToolResultValue,
+  ToolScriptingConfig,
+  Tools,
 } from './types';
-import type { MCPToolResult } from './mcp-adapter';
 
 export type {
   CodeModeOptions,
@@ -32,7 +36,14 @@ export type {
   ToolResultValue,
   OnToolResultCallback,
 };
-export { isMCPToolResult, adaptMCPToolResult, MCPToolError, DEFAULT_CODE_MODE_PROMPT, generateCodeSystemPrompt, createCodeMode };
+export {
+  isMCPToolResult,
+  adaptMCPToolResult,
+  MCPToolError,
+  DEFAULT_CODE_MODE_PROMPT,
+  generateCodeSystemPrompt,
+  createCodeMode,
+};
 
 /**
  * Sentinel prefix used to signal script abort across the isolate boundary.
@@ -78,15 +89,19 @@ class CodeExecutionSandbox {
   async execute(
     code: string,
     bindings: Record<string, Function>,
-    includeExecutionTrace = false
+    includeExecutionTrace = false,
   ): Promise<any> {
     // Always log the script to console for debugging
     console.log('[toolScripting] Executing script:');
     console.log(code);
     console.log('---');
 
-    const memoryLimitMb = Math.max(8, Math.ceil(this.maxMemory / (1024 * 1024)));
+    const memoryLimitMb = Math.max(
+      8,
+      Math.ceil(this.maxMemory / (1024 * 1024)),
+    );
 
+    // biome-ignore lint/suspicious/noAsyncPromiseExecutor: isolate-vm requires async setup inside the executor
     return new Promise(async (resolve, reject) => {
       const isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
       let finished = false;
@@ -95,7 +110,9 @@ class CodeExecutionSandbox {
       const executionLog: Array<{ fn: string; args: any; result: any }> = [];
 
       const cleanup = () => {
-        try { isolate.dispose(); } catch {}
+        try {
+          isolate.dispose();
+        } catch {}
       };
       const wallTimer = setTimeout(() => {
         if (!finished) {
@@ -119,13 +136,21 @@ class CodeExecutionSandbox {
               warn: (...args) => $2.apply(undefined, args, { arguments: { copy: true } })
             };`,
             [
-              new ivm.Reference((...args: any[]) => console.log('[sandbox]', ...args)),
-              new ivm.Reference((...args: any[]) => console.error('[sandbox]', ...args)),
-              new ivm.Reference((...args: any[]) => console.warn('[sandbox]', ...args)),
+              new ivm.Reference((...args: any[]) =>
+                console.log('[sandbox]', ...args),
+              ),
+              new ivm.Reference((...args: any[]) =>
+                console.error('[sandbox]', ...args),
+              ),
+              new ivm.Reference((...args: any[]) =>
+                console.warn('[sandbox]', ...args),
+              ),
             ],
           );
         } else {
-          await context.eval(`global.console = { log: () => {}, error: () => {}, warn: () => {} };`);
+          await context.eval(
+            `global.console = { log: () => {}, error: () => {}, warn: () => {} };`,
+          );
         }
 
         // Timers bridging (basic)
@@ -151,17 +176,23 @@ class CodeExecutionSandbox {
         for (const [name, fn] of Object.entries(bindings)) {
           await context.evalClosure(
             `global[${JSON.stringify(name)}] = (...args) => $0.apply(undefined, args, { arguments: { copy: true }, result: { promise: true, copy: true } });`,
-            [ new ivm.Reference(async (...args: any[]) => {
-              try {
-                const result = await fn(...args);
-                executionLog.push({ fn: name, args, result });
-                return result;
-              } catch (error: any) {
-                const errorMsg = error?.message || String(error);
-                executionLog.push({ fn: name, args, result: `Error: ${errorMsg}` });
-                throw error;
-              }
-            }) ],
+            [
+              new ivm.Reference(async (...args: any[]) => {
+                try {
+                  const result = await fn(...args);
+                  executionLog.push({ fn: name, args, result });
+                  return result;
+                } catch (error: any) {
+                  const errorMsg = error?.message || String(error);
+                  executionLog.push({
+                    fn: name,
+                    args,
+                    result: `Error: ${errorMsg}`,
+                  });
+                  throw error;
+                }
+              }),
+            ],
           );
         }
 
@@ -183,7 +214,12 @@ class CodeExecutionSandbox {
                 clearTimeout(wallTimer);
                 cleanup();
                 // Format execution log and final result
-                const formattedResult = this.formatExecutionResult(executionLog, res, undefined, includeExecutionTrace);
+                const formattedResult = this.formatExecutionResult(
+                  executionLog,
+                  res,
+                  undefined,
+                  includeExecutionTrace,
+                );
                 resolve(formattedResult);
               }
             }),
@@ -206,7 +242,12 @@ class CodeExecutionSandbox {
                 }
 
                 // Include execution log even on error
-                const formattedError = this.formatExecutionResult(executionLog, null, msg, includeExecutionTrace);
+                const formattedError = this.formatExecutionResult(
+                  executionLog,
+                  null,
+                  msg,
+                  includeExecutionTrace,
+                );
                 reject(new Error(formattedError));
               }
             }),
@@ -228,15 +269,21 @@ class CodeExecutionSandbox {
   /**
    * Format execution log and final result in an LLM-friendly format
    */
-  private formatExecutionResult(log: Array<{ fn: string; args: any; result: any }>, finalResult: any, error?: string, includeExecutionTrace = false): string {
+  private formatExecutionResult(
+    log: Array<{ fn: string; args: any; result: any }>,
+    finalResult: any,
+    error?: string,
+    includeExecutionTrace = false,
+  ): string {
     // Always log execution trace to console for debugging
     if (log.length > 0) {
       console.log('[toolScripting] Execution trace:');
       for (const entry of log) {
         const argsStr = JSON.stringify(entry.args);
-        const resultStr = typeof entry.result === 'string'
-          ? entry.result
-          : JSON.stringify(entry.result);
+        const resultStr =
+          typeof entry.result === 'string'
+            ? entry.result
+            : JSON.stringify(entry.result);
         console.log(`  ${entry.fn}(${argsStr}) → ${resultStr}`);
       }
     }
@@ -248,9 +295,10 @@ class CodeExecutionSandbox {
       lines.push('Execution trace:');
       for (const entry of log) {
         const argsStr = JSON.stringify(entry.args);
-        const resultStr = typeof entry.result === 'string'
-          ? entry.result
-          : JSON.stringify(entry.result);
+        const resultStr =
+          typeof entry.result === 'string'
+            ? entry.result
+            : JSON.stringify(entry.result);
         lines.push(`  ${entry.fn}(${argsStr}) → ${resultStr}`);
       }
       lines.push('');
@@ -260,9 +308,10 @@ class CodeExecutionSandbox {
     if (error) {
       lines.push(`Script error: ${error}`);
     } else if (finalResult !== undefined && finalResult !== null) {
-      const resultStr = typeof finalResult === 'string'
-        ? finalResult
-        : JSON.stringify(finalResult);
+      const resultStr =
+        typeof finalResult === 'string'
+          ? finalResult
+          : JSON.stringify(finalResult);
       lines.push(`Final result: ${resultStr}`);
     }
 
@@ -289,7 +338,7 @@ function sanitizeToolName(name: string): string {
  */
 function extractToolBindings(
   tools: Tools,
-  onToolResult?: OnToolResultCallback
+  onToolResult?: OnToolResultCallback,
 ): Record<string, Function> {
   const bindings: Record<string, Function> = {};
 
@@ -298,7 +347,9 @@ function extractToolBindings(
     const sanitizedName = sanitizeToolName(name);
 
     if (!tool.execute) {
-      throw new Error(`Tool "${name}" must have an execute function for code mode`);
+      throw new Error(
+        `Tool "${name}" must have an execute function for code mode`,
+      );
     }
 
     const wrappedExecute = async (...args: any[]) => {
@@ -314,7 +365,11 @@ function extractToolBindings(
 
       // Circuit breaker callback - inspect result and optionally abort
       if (onToolResult) {
-        const signal = onToolResult(name, result, executeArgs[0] as Record<string, unknown>);
+        const signal = onToolResult(
+          name,
+          result,
+          executeArgs[0] as Record<string, unknown>,
+        );
         if (signal.signal === 'abort') {
           // Throw error with result encoded in message - sandbox will detect and handle
           throw createAbortError(signal.result);
@@ -332,7 +387,10 @@ function extractToolBindings(
   return bindings;
 }
 
-function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions: string, defaultPrompt: string) => string): string {
+function generateCodeSystemPrompt(
+  tools: Tools,
+  customPrompt?: (toolDescriptions: string, defaultPrompt: string) => string,
+): string {
   const toolDescriptions = Object.entries(tools)
     .map(([name, tool]) => {
       // Use sanitized name in documentation to match what's available in the sandbox
@@ -348,8 +406,14 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
       let returnType = 'unknown';
 
       if (outputInfo) {
-        if (outputInfo.isObject && outputInfo.properties && outputInfo.properties.length > 0) {
-          lines.push(generateTypeDefinition(resultTypeName, outputInfo.properties));
+        if (
+          outputInfo.isObject &&
+          outputInfo.properties &&
+          outputInfo.properties.length > 0
+        ) {
+          lines.push(
+            generateTypeDefinition(resultTypeName, outputInfo.properties),
+          );
           lines.push('');
           returnType = resultTypeName;
         } else {
@@ -358,7 +422,14 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
       }
 
       // Generate function type declaration with inline comments
-      lines.push(generateFunctionTypeDeclaration(sanitizedName, tool.description || '', params, returnType));
+      lines.push(
+        generateFunctionTypeDeclaration(
+          sanitizedName,
+          tool.description || '',
+          params,
+          returnType,
+        ),
+      );
 
       return lines.join('\n');
     })
@@ -377,7 +448,10 @@ function generateCodeSystemPrompt(tools: Tools, customPrompt?: (toolDescriptions
  * Optional callbacks for script execution lifecycle events.
  */
 export type ScriptCallbacks = {
-  scriptMetadataCallback?: (metadata: { description: string; script: string }) => void;
+  scriptMetadataCallback?: (metadata: {
+    description: string;
+    script: string;
+  }) => void;
   scriptResultCallback?: (result: any) => void;
 };
 
@@ -429,18 +503,48 @@ function createCodeMode(options: CodeModeOptions = {}): CodeMode {
 
       return {
         runToolScript: {
-          description: 'Execute the provided tool script with available functions',
+          description:
+            'Execute the provided tool script with available functions',
           inputSchema: z.object({
-            description: z.string().describe('Brief human-friendly description of what this script does'),
+            description: z
+              .string()
+              .describe(
+                'Brief human-friendly description of what this script does',
+              ),
             script: z.string().describe('The JavaScript code to execute'),
-            includeExecutionTrace: z.boolean().optional().describe('Set to true ONLY when debugging to see each function call and result. Omit or set to false by default to reduce token usage and allow efficient extraction of data from large responses'),
+            includeExecutionTrace: z
+              .boolean()
+              .optional()
+              .describe(
+                'Set to true ONLY when debugging to see each function call and result. Omit or set to false by default to reduce token usage and allow efficient extraction of data from large responses',
+              ),
           }),
-          execute: async ({ description, script, includeExecutionTrace }: { description: string; script: string; includeExecutionTrace?: boolean }) => {
+          execute: async ({
+            description,
+            script,
+            includeExecutionTrace,
+          }: {
+            description: string;
+            script: string;
+            includeExecutionTrace?: boolean;
+          }) => {
             callbacks?.scriptMetadataCallback?.({ description, script });
 
-            const result = await sandbox.execute(script, bindings, includeExecutionTrace);
+            const result = await sandbox.execute(
+              script,
+              bindings,
+              includeExecutionTrace,
+            );
 
-            console.log('[toolScripting] Script execution complete, result type:', typeof result, result === undefined ? 'UNDEFINED!' : result === null ? 'NULL!' : `length: ${(result as any)?.length || 'N/A'}`);
+            console.log(
+              '[toolScripting] Script execution complete, result type:',
+              typeof result,
+              result === undefined
+                ? 'UNDEFINED!'
+                : result === null
+                  ? 'NULL!'
+                  : `length: ${(result as any)?.length || 'N/A'}`,
+            );
 
             callbacks?.scriptResultCallback?.(result);
 
@@ -470,19 +574,35 @@ function createCodeMode(options: CodeModeOptions = {}): CodeMode {
  * const result = await enhanced({ model, messages, tools, system });
  * ```
  */
-export function toolScripting(aiFunction: Function, options: CodeModeOptions = {}) {
+export function toolScripting(
+  aiFunction: Function,
+  options: CodeModeOptions = {},
+) {
   const codeMode = createCodeMode(options);
 
-  return async function(config: ToolScriptingConfig) {
-    const { tools, system = '', scriptMetadataCallback, scriptResultCallback, ...restConfig } = config;
-    const toolsObj: Tools = tools || {} as Tools;
+  return async (config: ToolScriptingConfig) => {
+    const {
+      tools,
+      system = '',
+      scriptMetadataCallback,
+      scriptResultCallback,
+      ...restConfig
+    } = config;
+    const toolsObj: Tools = tools || ({} as Tools);
 
-    const codeModeTools = codeMode.createTool(toolsObj, { scriptMetadataCallback, scriptResultCallback });
+    const codeModeTools = codeMode.createTool(toolsObj, {
+      scriptMetadataCallback,
+      scriptResultCallback,
+    });
 
     const hasTools = Object.keys(toolsObj).length > 0;
-    const codeSystemPrompt = hasTools ? codeMode.generateSystemPrompt(toolsObj) : '';
+    const codeSystemPrompt = hasTools
+      ? codeMode.generateSystemPrompt(toolsObj)
+      : '';
     const enhancedSystem = hasTools
-      ? (system ? `${system}\n\n${codeSystemPrompt}` : codeSystemPrompt)
+      ? system
+        ? `${system}\n\n${codeSystemPrompt}`
+        : codeSystemPrompt
       : system;
 
     if (options.logEnhancedSystemPrompt) {

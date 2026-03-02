@@ -9,7 +9,7 @@ export function toPascalCase(str: string): string {
     .replace(/[^a-zA-Z0-9]/g, '_')
     .split('_')
     .filter(Boolean)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
 }
 
@@ -41,8 +41,8 @@ export function jsonSchemaToTypeString(schema: any): string {
 
     // Handle Zod object
     if (schema.type === 'object' && schema.def.shape) {
-      const entries = Object.entries(schema.def.shape).map(([k, v]: [string, any]) =>
-        `${k}: ${jsonSchemaToTypeString(v)}`
+      const entries = Object.entries(schema.def.shape).map(
+        ([k, v]: [string, any]) => `${k}: ${jsonSchemaToTypeString(v)}`,
       );
       return `{ ${entries.join(', ')} }`;
     }
@@ -55,8 +55,8 @@ export function jsonSchemaToTypeString(schema: any): string {
 
   // Standard JSON Schema format
   if (schema.type === 'object' && schema.properties) {
-    const entries = Object.entries(schema.properties).map(([k, v]: [string, any]) =>
-      `${k}: ${jsonSchemaToTypeString(v)}`
+    const entries = Object.entries(schema.properties).map(
+      ([k, v]: [string, any]) => `${k}: ${jsonSchemaToTypeString(v)}`,
     );
     return `{ ${entries.join(', ')} }`;
   }
@@ -135,7 +135,11 @@ export function toJsonSchema(schema: any): any {
     }
 
     // Already a JSON schema (has 'type' but not a Zod schema)
-    if (typeof schema === 'object' && 'type' in schema && typeof schema.type === 'string') {
+    if (
+      typeof schema === 'object' &&
+      'type' in schema &&
+      typeof schema.type === 'string'
+    ) {
       return schema;
     }
 
@@ -168,13 +172,20 @@ export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
 
   try {
     // support both Zod schemas and JSON Schema
-    const jsonSchema = 'jsonSchema' in schema ? schema.jsonSchema : toJsonSchema(schema);
+    const jsonSchema =
+      'jsonSchema' in schema ? schema.jsonSchema : toJsonSchema(schema);
     if (!jsonSchema) return [];
 
     // Extract parameters from Zod v4 toJSONSchema format (has 'def.shape')
-    if (jsonSchema.type === 'object' && jsonSchema.def && jsonSchema.def.shape) {
+    if (
+      jsonSchema.type === 'object' &&
+      jsonSchema.def &&
+      jsonSchema.def.shape
+    ) {
       const shape = jsonSchema.def.shape;
-      const required: string[] = Array.isArray(jsonSchema.def.required) ? jsonSchema.def.required : [];
+      const required: string[] = Array.isArray(jsonSchema.def.required)
+        ? jsonSchema.def.required
+        : [];
       return Object.entries(shape).map(([key, prop]: [string, any]) => {
         const type = jsonSchemaToTypeString(prop);
         const description = getSchemaDescription(prop);
@@ -185,13 +196,17 @@ export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
 
     // Extract parameters from standard JSON Schema format (has 'properties')
     if (jsonSchema.type === 'object' && jsonSchema.properties) {
-      const required: string[] = Array.isArray(jsonSchema.required) ? jsonSchema.required : [];
-      return Object.entries(jsonSchema.properties).map(([key, prop]: [string, any]) => {
-        const type = jsonSchemaToTypeString(prop);
-        const description = getSchemaDescription(prop);
-        const optional = !required.includes(key);
-        return { name: key, type, description, optional };
-      });
+      const required: string[] = Array.isArray(jsonSchema.required)
+        ? jsonSchema.required
+        : [];
+      return Object.entries(jsonSchema.properties).map(
+        ([key, prop]: [string, any]) => {
+          const type = jsonSchemaToTypeString(prop);
+          const description = getSchemaDescription(prop);
+          const optional = !required.includes(key);
+          return { name: key, type, description, optional };
+        },
+      );
     }
 
     return [];
@@ -204,7 +219,9 @@ export function getParamEntries(tool: ToolDefinition): ParamEntry[] {
 /**
  * Get output schema information including whether it's an object type
  */
-export function getOutputSchemaInfo(tool: ToolDefinition): OutputSchemaInfo | null {
+export function getOutputSchemaInfo(
+  tool: ToolDefinition,
+): OutputSchemaInfo | null {
   const schema = tool.outputSchema;
   if (!schema) return null;
 
@@ -217,23 +234,28 @@ export function getOutputSchemaInfo(tool: ToolDefinition): OutputSchemaInfo | nu
 
     // Check if it's an object type with properties
     const isZodObject = jsonSchema.type === 'object' && jsonSchema.def?.shape;
-    const isJsonSchemaObject = jsonSchema.type === 'object' && jsonSchema.properties;
+    const isJsonSchemaObject =
+      jsonSchema.type === 'object' && jsonSchema.properties;
 
     if (isZodObject) {
-      const properties = Object.entries(jsonSchema.def.shape).map(([key, prop]: [string, any]) => ({
-        name: key,
-        type: jsonSchemaToTypeString(prop),
-        description: getSchemaDescription(prop),
-      }));
+      const properties = Object.entries(jsonSchema.def.shape).map(
+        ([key, prop]: [string, any]) => ({
+          name: key,
+          type: jsonSchemaToTypeString(prop),
+          description: getSchemaDescription(prop),
+        }),
+      );
       return { type: typeStr, description, isObject: true, properties };
     }
 
     if (isJsonSchemaObject) {
-      const properties = Object.entries(jsonSchema.properties).map(([key, prop]: [string, any]) => ({
-        name: key,
-        type: jsonSchemaToTypeString(prop),
-        description: getSchemaDescription(prop),
-      }));
+      const properties = Object.entries(jsonSchema.properties).map(
+        ([key, prop]: [string, any]) => ({
+          name: key,
+          type: jsonSchemaToTypeString(prop),
+          description: getSchemaDescription(prop),
+        }),
+      );
       return { type: typeStr, description, isObject: true, properties };
     }
 
@@ -248,7 +270,7 @@ export function getOutputSchemaInfo(tool: ToolDefinition): OutputSchemaInfo | nu
  */
 export function generateTypeDefinition(
   typeName: string,
-  properties: Array<{ name: string; type: string; description?: string }>
+  properties: Array<{ name: string; type: string; description?: string }>,
 ): string {
   const lines: string[] = [`type ${typeName} = {`];
 
@@ -270,7 +292,7 @@ export function generateFunctionTypeDeclaration(
   functionName: string,
   description: string,
   params: ParamEntry[],
-  returnType: string
+  returnType: string,
 ): string {
   const lines: string[] = [];
 

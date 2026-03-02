@@ -1,9 +1,9 @@
-import { describe, test } from 'node:test';
 import assert from 'node:assert';
-import { toolScripting } from '../../dist/index.js';
+import { describe, test } from 'node:test';
 import { generateText, tool } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
+import { toolScripting } from '../../dist/index.js';
 
 /**
  * Creates a mock model that returns a tool script on first call
@@ -80,7 +80,15 @@ const tools = {
     }),
     // Simulate MCP content-only response (no structuredContent) with JSON in text
     execute: async () => ({
-      content: [{ type: 'text', text: JSON.stringify({ time: '3:45 PM', timezone: 'America/Los_Angeles' }) }],
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            time: '3:45 PM',
+            timezone: 'America/Los_Angeles',
+          }),
+        },
+      ],
     }),
   }),
 };
@@ -109,7 +117,10 @@ describe('basic tool scripting', () => {
     });
 
     assert.ok(scriptResult, 'Script should have produced a result');
-    assert.ok(scriptResult.includes('San Francisco'), 'Result should contain location');
+    assert.ok(
+      scriptResult.includes('San Francisco'),
+      'Result should contain location',
+    );
   });
 
   test('script result contains data from all tools', async () => {
@@ -135,14 +146,27 @@ describe('basic tool scripting', () => {
     });
 
     assert.ok(scriptResult, 'scriptResultCallback should have been called');
-    assert.ok(scriptResult.includes('San Francisco'), `Expected location in result, got: ${scriptResult}`);
-    assert.ok(scriptResult.includes('65'), `Expected temperature in result, got: ${scriptResult}`);
-    assert.ok(scriptResult.includes('foggy'), `Expected condition in result, got: ${scriptResult}`);
-    assert.ok(scriptResult.includes('3:45 PM'), `Expected time in result, got: ${scriptResult}`);
+    assert.ok(
+      scriptResult.includes('San Francisco'),
+      `Expected location in result, got: ${scriptResult}`,
+    );
+    assert.ok(
+      scriptResult.includes('65'),
+      `Expected temperature in result, got: ${scriptResult}`,
+    );
+    assert.ok(
+      scriptResult.includes('foggy'),
+      `Expected condition in result, got: ${scriptResult}`,
+    );
+    assert.ok(
+      scriptResult.includes('3:45 PM'),
+      `Expected time in result, got: ${scriptResult}`,
+    );
   });
 
   test('onFinish callback is invoked', async () => {
-    const script = 'const { location } = await getUserLocation(); return location;';
+    const script =
+      'const { location } = await getUserLocation(); return location;';
     const model = createMockModel(script);
 
     let finishCalled = false;
