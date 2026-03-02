@@ -101,7 +101,11 @@ class CodeExecutionSandbox {
       Math.ceil(this.maxMemory / (1024 * 1024)),
     );
 
-    // biome-ignore lint/suspicious/noAsyncPromiseExecutor: isolate-vm requires async setup inside the executor
+    // The isolated-vm API requires async setup (creating contexts, setting up bindings)
+    // before code execution, but the result is delivered via ivm.Reference callbacks from
+    // inside the V8 isolate — not via an awaitable return value. This means we need an
+    // explicit Promise whose resolve/reject are called by those callbacks.
+    // biome-ignore lint/suspicious/noAsyncPromiseExecutor: see above
     return new Promise(async (resolve, reject) => {
       const isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
       let finished = false;
